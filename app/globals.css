@@ -76,6 +76,18 @@ body::after {
   }
 }
 
+/* Active during cycle runs — pauses the backdrop animation so the macOS
+   compositor isn't burning a P-core while the WASM worker is. The gradient
+   stays painted (last frame) but stops drifting. Big variance reduction
+   on Apple Silicon since the WindowServer process can drop from ~50% CPU
+   to ~5% when nothing is animating. */
+body.bench-running::before {
+  animation: none;
+}
+body.bench-running .log-row {
+  animation: none;
+}
+
 main {
   position: relative;
   z-index: 1;

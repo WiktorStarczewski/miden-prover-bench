@@ -174,6 +174,23 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
     el.scrollTop = el.scrollHeight;
   }, [logs]);
 
+  // Pause the animated backdrop during cycle runs. The macOS compositor
+  // (WindowServer) burns ~50% of a P-core compositing the drifting radial
+  // gradients, which fights the SDK worker for SoC budget and inflates
+  // prove-time variance. Removing the animation drops it to near-zero
+  // while runs are in flight; the gradient stays painted (last frame) so
+  // the page doesn't visually flicker.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const cls = "bench-running";
+    if (phase === "cycles") {
+      document.body.classList.add(cls);
+    } else {
+      document.body.classList.remove(cls);
+    }
+    return () => document.body.classList.remove(cls);
+  }, [phase]);
+
   async function loadSdk(): Promise<Sdk> {
     if (sdkRef.current) return sdkRef.current;
     const mod = variant === "mt"
