@@ -10466,105 +10466,6 @@ function reconstructFlattenedVec(flattenedVec) {
     return result;
 }
 
-/*
- * Copyright 2022 Google Inc. All Rights Reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *     http://www.apache.org/licenses/LICENSE-2.0
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-// Note: we use `wasm_bindgen_worker_`-prefixed message types to make sure
-// we can handle bundling into other files, which might happen to have their
-// own `postMessage`/`onmessage` communication channels.
-//
-// If we didn't take that into the account, we could send much simpler signals
-// like just `0` or whatever, but the code would be less resilient.
-
-function waitForMsgType(target, type) {
-  return new Promise(resolve => {
-    target.addEventListener('message', function onMsg({ data }) {
-      if (data?.type !== type) return;
-      target.removeEventListener('message', onMsg);
-      resolve(data);
-    });
-  });
-}
-
-waitForMsgType(self, 'wasm_bindgen_worker_init').then(async ({ init, receiver }) => {
-  // # Note 1
-  // Our JS should have been generated in
-  // `[out-dir]/snippets/wasm-bindgen-rayon-[hash]/workerHelpers.js`,
-  // resolve the main module via `../../..`.
-  //
-  // This might need updating if the generated structure changes on wasm-bindgen
-  // side ever in the future, but works well with bundlers today. The whole
-  // point of this crate, after all, is to abstract away unstable features
-  // and temporary bugs so that you don't need to deal with them in your code.
-  //
-  // # Note 2
-  // This could be a regular import, but then some bundlers complain about
-  // circular deps.
-  //
-  // Dynamic import could be cheap if this file was inlined into the parent,
-  // which would require us just using `../../..` in `new Worker` below,
-  // but that doesn't work because wasm-pack unconditionally adds
-  // "sideEffects":false (see below).
-  //
-  // OTOH, even though it can't be inlined, it should be still reasonably
-  // cheap since the requested file is already in cache (it was loaded by
-  // the main thread).
-  const pkg = await Promise.resolve().then(function () { return index; });
-  await pkg.default(init);
-  postMessage({ type: 'wasm_bindgen_worker_ready' });
-  pkg.wbg_rayon_start_worker(receiver);
-});
-
-async function startWorkers(module, memory, builder) {
-  if (builder.numThreads() === 0) {
-    throw new Error(`num_threads must be > 0.`);
-  }
-
-  const workerInit = {
-    type: 'wasm_bindgen_worker_init',
-    init: { module_or_path: module, memory },
-    receiver: builder.receiver()
-  };
-
-  await Promise.all(
-    Array.from({ length: builder.numThreads() }, async () => {
-      // Self-spawn into a new Worker.
-      //
-      // TODO: while `new URL('...', import.meta.url) becomes a semi-standard
-      // way to get asset URLs relative to the module across various bundlers
-      // and browser, ideally we should switch to `import.meta.resolve`
-      // once it becomes a standard.
-      //
-      // Note: we could use `../../..` as the URL here to inline workerHelpers.js
-      // into the parent entry instead of creating another split point -
-      // this would be preferable from optimization perspective -
-      // however, Webpack then eliminates all message handler code
-      // because wasm-pack produces "sideEffects":false in package.json
-      // unconditionally.
-      //
-      // The only way to work around that is to have side effect code
-      // in an entry point such as Worker file itself.
-      const worker = new Worker(new URL('./workerHelpers.js', import.meta.url), {
-        type: 'module'
-      });
-      worker.postMessage(workerInit);
-      await waitForMsgType(worker, 'wasm_bindgen_worker_ready');
-      return worker;
-    })
-  );
-  builder.build();
-}
-
 /* @ts-self-types="./index.d.ts" */
 
 /**
@@ -21368,7 +21269,7 @@ class TransactionScript {
      * @returns {Word}
      */
     root() {
-        const ret = wasm.transactionscript_root(this.__wbg_ptr);
+        const ret = wasm.notescript_root(this.__wbg_ptr);
         return Word.__wrap(ret);
     }
 }
@@ -22909,40 +22810,6 @@ function importStore(store_name, store_dump) {
 }
 
 /**
- * @param {number} num_threads
- * @returns {Promise<any>}
- */
-function initThreadPool(num_threads) {
-    const ret = wasm.initThreadPool(num_threads);
-    return ret;
-}
-
-/**
- * Synthetic parallel benchmark: sums 0..n via `par_iter()` on the global
- * rayon pool. Returns elapsed micros. If the pool is actually multi-threaded,
- * large `n` should scale ~linearly with thread count. Diagnostic for
- * confirming whether rayon is dispatching work at all.
- * @param {bigint} n
- * @returns {bigint}
- */
-function parallelSumBench(n) {
-    const ret = wasm.parallelSumBench(n);
-    return BigInt.asUintN(64, ret);
-}
-
-/**
- * How many rayon worker threads are visible from THIS WASM instance's view of
- * the global rayon pool. Diagnostic only — the value should equal whatever
- * `initThreadPool(n)` was called with. If it's 1, rayon is in single-threaded
- * fallback (workers never spawned, or spawned in a different WASM instance).
- * @returns {number}
- */
-function rayonThreadCount() {
-    const ret = wasm.rayonThreadCount();
-    return ret >>> 0;
-}
-
-/**
  * Single-threaded version of `parallel_sum_bench` for direct comparison.
  * Same workload, plain `iter()` — bypasses rayon entirely.
  * @param {bigint} n
@@ -22972,52 +22839,7 @@ function setupLogging(log_level) {
     wasm.setupLogging(ptr0, len0);
 }
 
-class wbg_rayon_PoolBuilder {
-    static __wrap(ptr) {
-        ptr = ptr >>> 0;
-        const obj = Object.create(wbg_rayon_PoolBuilder.prototype);
-        obj.__wbg_ptr = ptr;
-        wbg_rayon_PoolBuilderFinalization.register(obj, obj.__wbg_ptr, obj);
-        return obj;
-    }
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        wbg_rayon_PoolBuilderFinalization.unregister(this);
-        return ptr;
-    }
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_wbg_rayon_poolbuilder_free(ptr, 0);
-    }
-    build() {
-        wasm.wbg_rayon_poolbuilder_build(this.__wbg_ptr);
-    }
-    /**
-     * @returns {number}
-     */
-    numThreads() {
-        const ret = wasm.notesyncinfo_blockTo(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-    /**
-     * @returns {number}
-     */
-    receiver() {
-        const ret = wasm.wbg_rayon_poolbuilder_receiver(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-}
-if (Symbol.dispose) wbg_rayon_PoolBuilder.prototype[Symbol.dispose] = wbg_rayon_PoolBuilder.prototype.free;
-
-/**
- * @param {number} receiver
- */
-function wbg_rayon_start_worker(receiver) {
-    wasm.wbg_rayon_start_worker(receiver);
-}
-
-function __wbg_get_imports(memory) {
+function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
         __wbg_Error_8c4e43fe74559d73: function(arg0, arg1) {
@@ -23045,13 +22867,6 @@ function __wbg_get_imports(memory) {
             const v = arg0;
             const ret = typeof(v) === 'boolean' ? v : undefined;
             return isLikeNone(ret) ? 0xFFFFFF : ret ? 1 : 0;
-        },
-        __wbg___wbindgen_debug_string_0bc8482c6e3508ae: function(arg0, arg1) {
-            const ret = debugString(arg1);
-            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-            const len1 = WASM_VECTOR_LEN;
-            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
         },
         __wbg___wbindgen_in_47fa6863be6f2f25: function(arg0, arg1) {
             const ret = arg0 in arg1;
@@ -23086,22 +22901,11 @@ function __wbg_get_imports(memory) {
             const ret = arg0 == arg1;
             return ret;
         },
-        __wbg___wbindgen_memory_bd1fbcf21fbef3c8: function() {
-            const ret = wasm.memory;
-            return ret;
-        },
-        __wbg___wbindgen_module_f6b8052d79c1cc16: function() {
-            const ret = wasmModule;
-            return ret;
-        },
         __wbg___wbindgen_number_get_8ff4255516ccad3e: function(arg0, arg1) {
             const obj = arg1;
             const ret = typeof(obj) === 'number' ? obj : undefined;
             getDataViewMemory0().setFloat64(arg0 + 8 * 1, isLikeNone(ret) ? 0 : ret, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, !isLikeNone(ret), true);
-        },
-        __wbg___wbindgen_rethrow_05525c567f154472: function(arg0) {
-            throw arg0;
         },
         __wbg___wbindgen_string_get_72fb696202c56729: function(arg0, arg1) {
             const obj = arg1;
@@ -23241,10 +23045,6 @@ function __wbg_get_imports(memory) {
             const ret = AssetVault.__wrap(arg0);
             return ret;
         },
-        __wbg_async_79f2a61f9d0b31cf: function(arg0) {
-            const ret = arg0.async;
-            return ret;
-        },
         __wbg_authsecretkey_new: function(arg0) {
             const ret = AuthSecretKey.__wrap(arg0);
             return ret;
@@ -23258,10 +23058,6 @@ function __wbg_get_imports(memory) {
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
         },
         __wbg_buffer_26d0910f3a5bc899: function(arg0) {
-            const ret = arg0.buffer;
-            return ret;
-        },
-        __wbg_buffer_7b5f53e46557d8f1: function(arg0) {
             const ret = arg0.buffer;
             return ret;
         },
@@ -23319,10 +23115,6 @@ function __wbg_get_imports(memory) {
             const ret = ConsumableNoteRecord.__wrap(arg0);
             return ret;
         },
-        __wbg_data_5330da50312d0bc1: function(arg0) {
-            const ret = arg0.data;
-            return ret;
-        },
         __wbg_done_57b39ecd9addfe81: function(arg0) {
             const ret = arg0.done;
             return ret;
@@ -23330,17 +23122,6 @@ function __wbg_get_imports(memory) {
         __wbg_enqueue_2c63f2044f257c3e: function() { return handleError(function (arg0, arg1) {
             arg0.enqueue(arg1);
         }, arguments); },
-        __wbg_error_7534b8e9a36f1ab4: function(arg0, arg1) {
-            let deferred0_0;
-            let deferred0_1;
-            try {
-                deferred0_0 = arg0;
-                deferred0_1 = arg1;
-                console.error(getStringFromWasm0(arg0, arg1));
-            } finally {
-                wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
-            }
-        },
         __wbg_exportStore_67cb33e10694e807: function(arg0, arg1) {
             const ret = exportStore(getStringFromWasm0(arg0, arg1));
             return ret;
@@ -23629,8 +23410,8 @@ function __wbg_get_imports(memory) {
             const ret = getPartialBlockchainPeaksByBlockNum(getStringFromWasm0(arg0, arg1), arg2 >>> 0);
             return ret;
         },
-        __wbg_getRandomValues_ea728b1d79dae146: function() { return handleError(function (arg0) {
-            globalThis.crypto.getRandomValues(arg0);
+        __wbg_getRandomValues_1c61fac11405ffdc: function() { return handleError(function (arg0, arg1) {
+            globalThis.crypto.getRandomValues(getArrayU8FromWasm0(arg0, arg1));
         }, arguments); },
         __wbg_getReader_f47519d698a4505e: function() { return handleError(function (arg0) {
             const ret = arg0.getReader();
@@ -23839,16 +23620,6 @@ function __wbg_get_imports(memory) {
             const ret = result;
             return ret;
         },
-        __wbg_instanceof_Window_ed49b2db8df90359: function(arg0) {
-            let result;
-            try {
-                result = arg0 instanceof Window;
-            } catch (_) {
-                result = false;
-            }
-            const ret = result;
-            return ret;
-        },
         __wbg_isArray_d314bb98fcf08331: function(arg0) {
             const ret = Array.isArray(arg0);
             return ret;
@@ -23970,24 +23741,12 @@ function __wbg_get_imports(memory) {
             const ret = new Array();
             return ret;
         },
-        __wbg_new_4f8f3c123e474358: function() { return handleError(function (arg0, arg1) {
-            const ret = new Worker(getStringFromWasm0(arg0, arg1));
-            return ret;
-        }, arguments); },
         __wbg_new_64284bd487f9d239: function() { return handleError(function () {
             const ret = new Headers();
             return ret;
         }, arguments); },
         __wbg_new_72b49615380db768: function(arg0, arg1) {
             const ret = new Error(getStringFromWasm0(arg0, arg1));
-            return ret;
-        },
-        __wbg_new_72c627ba80de1c21: function(arg0) {
-            const ret = new Int32Array(arg0);
-            return ret;
-        },
-        __wbg_new_8a6f238a6ece86ea: function() {
-            const ret = new Error();
             return ret;
         },
         __wbg_new_b5d9e2fb389fef91: function(arg0, arg1) {
@@ -23997,7 +23756,7 @@ function __wbg_get_imports(memory) {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue__wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(a, state0.b, arg0, arg1);
+                        return wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue__wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -24026,10 +23785,6 @@ function __wbg_get_imports(memory) {
         },
         __wbg_new_with_byte_offset_and_length_aa261d9c9da49eb1: function(arg0, arg1, arg2) {
             const ret = new Uint8Array(arg0, arg1 >>> 0, arg2 >>> 0);
-            return ret;
-        },
-        __wbg_new_with_length_a2c39cbe88fd8ff1: function(arg0) {
-            const ret = new Uint8Array(arg0 >>> 0);
             return ret;
         },
         __wbg_new_with_str_and_init_a61cbc6bdef21614: function() { return handleError(function (arg0, arg1, arg2) {
@@ -24108,10 +23863,6 @@ function __wbg_get_imports(memory) {
             const ret = NoteTag.__unwrap(arg0);
             return ret;
         },
-        __wbg_of_ddc0942b0dce16a1: function(arg0, arg1, arg2) {
-            const ret = Array.of(arg0, arg1, arg2);
-            return ret;
-        },
         __wbg_openDatabase_cde23913ad00e851: function(arg0, arg1, arg2, arg3) {
             const ret = openDatabase(getStringFromWasm0(arg0, arg1), getStringFromWasm0(arg2, arg3));
             return ret;
@@ -24128,9 +23879,6 @@ function __wbg_get_imports(memory) {
             const ret = OutputNoteRecord.__wrap(arg0);
             return ret;
         },
-        __wbg_postMessage_771ef3293a28bbac: function() { return handleError(function (arg0, arg1) {
-            arg0.postMessage(arg1);
-        }, arguments); },
         __wbg_procedurethreshold_new: function(arg0) {
             const ret = ProcedureThreshold.__wrap(arg0);
             return ret;
@@ -24312,9 +24060,6 @@ function __wbg_get_imports(memory) {
         __wbg_set_mode_b13642c312648202: function(arg0, arg1) {
             arg0.mode = __wbindgen_enum_RequestMode[arg1];
         },
-        __wbg_set_onmessage_6ed41050e4a5cee2: function(arg0, arg1) {
-            arg0.onmessage = arg1;
-        },
         __wbg_set_redirect_a7956fa3f817cbbc: function(arg0, arg1) {
             arg0.redirect = __wbindgen_enum_RequestRedirect[arg1];
         },
@@ -24333,17 +24078,6 @@ function __wbg_get_imports(memory) {
         },
         __wbg_slotandkeys_unwrap: function(arg0) {
             const ret = SlotAndKeys.__unwrap(arg0);
-            return ret;
-        },
-        __wbg_stack_0ed75d68575b0f3c: function(arg0, arg1) {
-            const ret = arg1.stack;
-            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-            const len1 = WASM_VECTOR_LEN;
-            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-        },
-        __wbg_startWorkers_2ca11761e08ff5d5: function(arg0, arg1, arg2) {
-            const ret = startWorkers(arg0, arg1, wbg_rayon_PoolBuilder.__wrap(arg2));
             return ret;
         },
         __wbg_static_accessor_GLOBAL_12837167ad935116: function() {
@@ -24658,21 +24392,9 @@ function __wbg_get_imports(memory) {
             const ret = arg0.value;
             return ret;
         },
-        __wbg_value_fe6ee34af5dc3dce: function(arg0) {
-            const ret = arg0.value;
-            return ret;
-        },
         __wbg_view_6c32e7184b8606ad: function(arg0) {
             const ret = arg0.view;
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-        },
-        __wbg_waitAsync_a58b2134bff39c3e: function(arg0, arg1, arg2) {
-            const ret = Atomics.waitAsync(arg0, arg1 >>> 0, arg2);
-            return ret;
-        },
-        __wbg_waitAsync_c0a39a7d3318d91e: function() {
-            const ret = Atomics.waitAsync;
-            return ret;
         },
         __wbg_word_new: function(arg0) {
             const ret = Word.__wrap(arg0);
@@ -24683,99 +24405,94 @@ function __wbg_get_imports(memory) {
             return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 103, function: Function { arguments: [Externref], shim_idx: 104, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9cf17b78bd51a2ed___closure__destroy___dyn_core_3058b10a1691ccb3___ops__function__FnMut__wasm_bindgen_9cf17b78bd51a2ed___JsValue____Output_______, wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 137, function: Function { arguments: [Externref], shim_idx: 278, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_d95d7c4a5cb06fc0___closure__destroy___dyn_core_91ed24bc3d45dfd0___ops__function__FnMut__wasm_bindgen_d95d7c4a5cb06fc0___JsValue____Output_______, wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 103, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 104, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9cf17b78bd51a2ed___closure__destroy___dyn_core_3058b10a1691ccb3___ops__function__FnMut__wasm_bindgen_9cf17b78bd51a2ed___JsValue____Output_______, wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 137, function: Function { arguments: [], shim_idx: 138, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_d95d7c4a5cb06fc0___closure__destroy___dyn_core_91ed24bc3d45dfd0___ops__function__FnMut__wasm_bindgen_d95d7c4a5cb06fc0___JsValue____Output_______, wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke______);
             return ret;
         },
-        __wbindgen_cast_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 103, function: Function { arguments: [], shim_idx: 389, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9cf17b78bd51a2ed___closure__destroy___dyn_core_3058b10a1691ccb3___ops__function__FnMut__wasm_bindgen_9cf17b78bd51a2ed___JsValue____Output_______, wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke______);
-            return ret;
-        },
-        __wbindgen_cast_0000000000000004: function(arg0) {
+        __wbindgen_cast_0000000000000003: function(arg0) {
             // Cast intrinsic for `F64 -> Externref`.
             const ret = arg0;
             return ret;
         },
-        __wbindgen_cast_0000000000000005: function(arg0, arg1) {
+        __wbindgen_cast_0000000000000004: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
             return ret;
         },
-        __wbindgen_cast_0000000000000006: function(arg0) {
+        __wbindgen_cast_0000000000000005: function(arg0) {
             // Cast intrinsic for `U64 -> Externref`.
             const ret = BigInt.asUintN(64, arg0);
             return ret;
         },
-        __wbindgen_cast_0000000000000007: function(arg0, arg1) {
+        __wbindgen_cast_0000000000000006: function(arg0, arg1) {
             var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 4, 4);
             // Cast intrinsic for `Vector(NamedExternref("AccountHeader")) -> Externref`.
             const ret = v0;
             return ret;
         },
-        __wbindgen_cast_0000000000000008: function(arg0, arg1) {
+        __wbindgen_cast_0000000000000007: function(arg0, arg1) {
             var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 4, 4);
             // Cast intrinsic for `Vector(NamedExternref("Address")) -> Externref`.
             const ret = v0;
             return ret;
         },
-        __wbindgen_cast_0000000000000009: function(arg0, arg1) {
+        __wbindgen_cast_0000000000000008: function(arg0, arg1) {
             var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 4, 4);
             // Cast intrinsic for `Vector(NamedExternref("ConsumableNoteRecord")) -> Externref`.
             const ret = v0;
             return ret;
         },
-        __wbindgen_cast_000000000000000a: function(arg0, arg1) {
+        __wbindgen_cast_0000000000000009: function(arg0, arg1) {
             var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 4, 4);
             // Cast intrinsic for `Vector(NamedExternref("FetchedNote")) -> Externref`.
             const ret = v0;
             return ret;
         },
-        __wbindgen_cast_000000000000000b: function(arg0, arg1) {
+        __wbindgen_cast_000000000000000a: function(arg0, arg1) {
             var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 4, 4);
             // Cast intrinsic for `Vector(NamedExternref("InputNoteRecord")) -> Externref`.
             const ret = v0;
             return ret;
         },
-        __wbindgen_cast_000000000000000c: function(arg0, arg1) {
+        __wbindgen_cast_000000000000000b: function(arg0, arg1) {
             var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 4, 4);
             // Cast intrinsic for `Vector(NamedExternref("OutputNoteRecord")) -> Externref`.
             const ret = v0;
             return ret;
         },
-        __wbindgen_cast_000000000000000d: function(arg0, arg1) {
+        __wbindgen_cast_000000000000000c: function(arg0, arg1) {
             var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 4, 4);
             // Cast intrinsic for `Vector(NamedExternref("TransactionRecord")) -> Externref`.
             const ret = v0;
             return ret;
         },
-        __wbindgen_cast_000000000000000e: function(arg0, arg1) {
+        __wbindgen_cast_000000000000000d: function(arg0, arg1) {
             var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 4, 4);
             // Cast intrinsic for `Vector(NamedExternref("Word")) -> Externref`.
             const ret = v0;
             return ret;
         },
-        __wbindgen_cast_000000000000000f: function(arg0, arg1) {
+        __wbindgen_cast_000000000000000e: function(arg0, arg1) {
             var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 4, 4);
             // Cast intrinsic for `Vector(NamedExternref("string")) -> Externref`.
             const ret = v0;
             return ret;
         },
-        __wbindgen_cast_0000000000000010: function(arg0, arg1) {
+        __wbindgen_cast_000000000000000f: function(arg0, arg1) {
             var v0 = getArrayU8FromWasm0(arg0, arg1).slice();
             wasm.__wbindgen_free(arg0, arg1 * 1, 1);
             // Cast intrinsic for `Vector(U8) -> Externref`.
@@ -24791,21 +24508,6 @@ function __wbg_get_imports(memory) {
             table.set(offset + 2, true);
             table.set(offset + 3, false);
         },
-        __wbindgen_link_0b1f76d235fd2b86: function(arg0) {
-            const val = `onmessage = function (ev) {
-                let [ia, index, value] = ev.data;
-                ia = new Int32Array(ia.buffer);
-                let result = Atomics.wait(ia, index, value);
-                postMessage(result);
-            };
-            `;
-            const ret = typeof URL.createObjectURL === 'undefined' ? "data:application/javascript," + encodeURIComponent(val) : URL.createObjectURL(new Blob([val], { type: "text/javascript" }));
-            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-            const len1 = WASM_VECTOR_LEN;
-            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
-        },
-        memory: memory || new WebAssembly.Memory({initial:48,maximum:65536,shared:true}),
     };
     return {
         __proto__: null,
@@ -24813,16 +24515,16 @@ function __wbg_get_imports(memory) {
     };
 }
 
-function wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke______(arg0, arg1) {
-    wasm.wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke______(arg0, arg1);
+function wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke______(arg0, arg1) {
+    wasm.wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke______(arg0, arg1);
 }
 
-function wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2) {
-    wasm.wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2);
+function wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2) {
+    wasm.wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2);
 }
 
-function wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue__wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2, arg3) {
-    wasm.wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue__wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2, arg3);
+function wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue__wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2, arg3) {
+    wasm.wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue__wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2, arg3);
 }
 
 
@@ -25244,9 +24946,6 @@ const WebKeystoreApiFinalization = (typeof FinalizationRegistry === 'undefined')
 const WordFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_word_free(ptr >>> 0, 1));
-const wbg_rayon_PoolBuilderFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_wbg_rayon_poolbuilder_free(ptr >>> 0, 1));
 
 function addToExternrefTable0(obj) {
     const idx = wasm.__externref_table_alloc();
@@ -25263,71 +24962,6 @@ function _assertClass(instance, klass) {
 const CLOSURE_DTORS = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(state => state.dtor(state.a, state.b));
-
-function debugString(val) {
-    // primitive types
-    const type = typeof val;
-    if (type == 'number' || type == 'boolean' || val == null) {
-        return  `${val}`;
-    }
-    if (type == 'string') {
-        return `"${val}"`;
-    }
-    if (type == 'symbol') {
-        const description = val.description;
-        if (description == null) {
-            return 'Symbol';
-        } else {
-            return `Symbol(${description})`;
-        }
-    }
-    if (type == 'function') {
-        const name = val.name;
-        if (typeof name == 'string' && name.length > 0) {
-            return `Function(${name})`;
-        } else {
-            return 'Function';
-        }
-    }
-    // objects
-    if (Array.isArray(val)) {
-        const length = val.length;
-        let debug = '[';
-        if (length > 0) {
-            debug += debugString(val[0]);
-        }
-        for(let i = 1; i < length; i++) {
-            debug += ', ' + debugString(val[i]);
-        }
-        debug += ']';
-        return debug;
-    }
-    // Test for built-in
-    const builtInMatches = /\[object ([^\]]+)\]/.exec(toString.call(val));
-    let className;
-    if (builtInMatches && builtInMatches.length > 1) {
-        className = builtInMatches[1];
-    } else {
-        // Failed to match the standard '[object ClassName]'
-        return toString.call(val);
-    }
-    if (className == 'Object') {
-        // we're a user defined class or Object
-        // JSON.stringify avoids problems with cycles, and is generally much
-        // easier than looping through ownProperties of `val`.
-        try {
-            return 'Object(' + JSON.stringify(val) + ')';
-        } catch (_) {
-            return 'Object';
-        }
-    }
-    // errors
-    if (val instanceof Error) {
-        return `${val.name}: ${val.message}\n${val.stack}`;
-    }
-    // TODO we could test for more things here, like `Set`s and `Map`s.
-    return className;
-}
 
 function getArrayJsValueFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -25357,7 +24991,7 @@ function getArrayU8FromWasm0(ptr, len) {
 
 let cachedBigUint64ArrayMemory0 = null;
 function getBigUint64ArrayMemory0() {
-    if (cachedBigUint64ArrayMemory0 === null || cachedBigUint64ArrayMemory0.buffer !== wasm.memory.buffer) {
+    if (cachedBigUint64ArrayMemory0 === null || cachedBigUint64ArrayMemory0.byteLength === 0) {
         cachedBigUint64ArrayMemory0 = new BigUint64Array(wasm.memory.buffer);
     }
     return cachedBigUint64ArrayMemory0;
@@ -25365,7 +24999,7 @@ function getBigUint64ArrayMemory0() {
 
 let cachedDataViewMemory0 = null;
 function getDataViewMemory0() {
-    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer !== wasm.memory.buffer) {
+    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
         cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
     }
     return cachedDataViewMemory0;
@@ -25378,7 +25012,7 @@ function getStringFromWasm0(ptr, len) {
 
 let cachedUint32ArrayMemory0 = null;
 function getUint32ArrayMemory0() {
-    if (cachedUint32ArrayMemory0 === null || cachedUint32ArrayMemory0.buffer !== wasm.memory.buffer) {
+    if (cachedUint32ArrayMemory0 === null || cachedUint32ArrayMemory0.byteLength === 0) {
         cachedUint32ArrayMemory0 = new Uint32Array(wasm.memory.buffer);
     }
     return cachedUint32ArrayMemory0;
@@ -25386,7 +25020,7 @@ function getUint32ArrayMemory0() {
 
 let cachedUint8ArrayMemory0 = null;
 function getUint8ArrayMemory0() {
-    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.buffer !== wasm.memory.buffer) {
+    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
         cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
     }
     return cachedUint8ArrayMemory0;
@@ -25507,9 +25141,8 @@ function takeFromExternrefTable0(idx) {
     return value;
 }
 
-let cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : undefined);
-if (cachedTextDecoder) cachedTextDecoder.decode();
-
+let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
+cachedTextDecoder.decode();
 const MAX_SAFARI_DECODE_BYTES = 2146435072;
 let numBytesDecoded = 0;
 function decodeText(ptr, len) {
@@ -25519,12 +25152,12 @@ function decodeText(ptr, len) {
         cachedTextDecoder.decode();
         numBytesDecoded = len;
     }
-    return cachedTextDecoder.decode(getUint8ArrayMemory0().slice(ptr, ptr + len));
+    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
 }
 
-const cachedTextEncoder = (typeof TextEncoder !== 'undefined' ? new TextEncoder() : undefined);
+const cachedTextEncoder = new TextEncoder();
 
-if (cachedTextEncoder) {
+if (!('encodeInto' in cachedTextEncoder)) {
     cachedTextEncoder.encodeInto = function (arg, view) {
         const buf = cachedTextEncoder.encode(arg);
         view.set(buf);
@@ -25537,18 +25170,14 @@ if (cachedTextEncoder) {
 
 let WASM_VECTOR_LEN = 0;
 
-let wasmModule, wasm;
-function __wbg_finalize_init(instance, module, thread_stack_size) {
+let wasm;
+function __wbg_finalize_init(instance, module) {
     wasm = instance.exports;
-    wasmModule = module;
     cachedBigUint64ArrayMemory0 = null;
     cachedDataViewMemory0 = null;
     cachedUint32ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;
-    if (typeof thread_stack_size !== 'undefined' && (typeof thread_stack_size !== 'number' || thread_stack_size === 0 || thread_stack_size % 65536 !== 0)) {
-        throw 'invalid stack size';
-    }
-    wasm.__wbindgen_start(thread_stack_size);
+    wasm.__wbindgen_start();
     return wasm;
 }
 
@@ -25587,40 +25216,40 @@ async function __wbg_load(module, imports) {
     }
 }
 
-function initSync(module, memory) {
+function initSync(module) {
     if (wasm !== undefined) return wasm;
 
-    let thread_stack_size;
+
     if (module !== undefined) {
         if (Object.getPrototypeOf(module) === Object.prototype) {
-            ({module, memory, thread_stack_size} = module);
+            ({module} = module);
         } else {
             console.warn('using deprecated parameters for `initSync()`; pass a single object instead');
         }
     }
 
-    const imports = __wbg_get_imports(memory);
+    const imports = __wbg_get_imports();
     if (!(module instanceof WebAssembly.Module)) {
         module = new WebAssembly.Module(module);
     }
     const instance = new WebAssembly.Instance(module, imports);
-    return __wbg_finalize_init(instance, module, thread_stack_size);
+    return __wbg_finalize_init(instance);
 }
 
-async function __wbg_init(module_or_path, memory) {
+async function __wbg_init(module_or_path) {
     if (wasm !== undefined) return wasm;
 
-    let thread_stack_size;
+
     if (module_or_path !== undefined) {
         if (Object.getPrototypeOf(module_or_path) === Object.prototype) {
-            ({module_or_path, memory, thread_stack_size} = module_or_path);
+            ({module_or_path} = module_or_path);
         } else {
             console.warn('using deprecated parameters for the initialization function; pass a single object instead');
         }
     }
 
 
-    const imports = __wbg_get_imports(memory);
+    const imports = __wbg_get_imports();
 
     if (typeof module_or_path === 'string' || (typeof Request === 'function' && module_or_path instanceof Request) || (typeof URL === 'function' && module_or_path instanceof URL)) {
         module_or_path = fetch(module_or_path);
@@ -25628,170 +25257,10 @@ async function __wbg_init(module_or_path, memory) {
 
     const { instance, module } = await __wbg_load(await module_or_path, imports);
 
-    return __wbg_finalize_init(instance, module, thread_stack_size);
+    return __wbg_finalize_init(instance);
 }
-
-var index = /*#__PURE__*/Object.freeze({
-	__proto__: null,
-	Account: Account,
-	AccountArray: AccountArray,
-	AccountBuilder: AccountBuilder,
-	AccountBuilderResult: AccountBuilderResult,
-	AccountCode: AccountCode,
-	AccountComponent: AccountComponent,
-	AccountComponentCode: AccountComponentCode,
-	AccountDelta: AccountDelta,
-	AccountFile: AccountFile,
-	AccountHeader: AccountHeader,
-	AccountId: AccountId,
-	AccountIdArray: AccountIdArray,
-	AccountInterface: AccountInterface,
-	AccountProof: AccountProof,
-	AccountReader: AccountReader,
-	AccountStatus: AccountStatus,
-	AccountStorage: AccountStorage,
-	AccountStorageDelta: AccountStorageDelta,
-	AccountStorageMode: AccountStorageMode,
-	AccountStorageRequirements: AccountStorageRequirements,
-	AccountType: AccountType,
-	AccountVaultDelta: AccountVaultDelta,
-	Address: Address,
-	AdviceInputs: AdviceInputs,
-	AdviceMap: AdviceMap,
-	AssetVault: AssetVault,
-	AuthFalcon512RpoMultisigConfig: AuthFalcon512RpoMultisigConfig,
-	AuthScheme: AuthScheme,
-	AuthSecretKey: AuthSecretKey,
-	BasicFungibleFaucetComponent: BasicFungibleFaucetComponent,
-	BlockHeader: BlockHeader,
-	CodeBuilder: CodeBuilder,
-	CommittedNote: CommittedNote,
-	ConsumableNoteRecord: ConsumableNoteRecord,
-	Endpoint: Endpoint,
-	ExecutedTransaction: ExecutedTransaction,
-	Felt: Felt,
-	FeltArray: FeltArray,
-	FetchedAccount: FetchedAccount,
-	FetchedNote: FetchedNote,
-	FlattenedU8Vec: FlattenedU8Vec,
-	ForeignAccount: ForeignAccount,
-	ForeignAccountArray: ForeignAccountArray,
-	FungibleAsset: FungibleAsset,
-	FungibleAssetDelta: FungibleAssetDelta,
-	FungibleAssetDeltaItem: FungibleAssetDeltaItem,
-	GetProceduresResultItem: GetProceduresResultItem,
-	InputNote: InputNote,
-	InputNoteRecord: InputNoteRecord,
-	InputNoteState: InputNoteState,
-	InputNotes: InputNotes,
-	IntoUnderlyingByteSource: IntoUnderlyingByteSource,
-	IntoUnderlyingSink: IntoUnderlyingSink,
-	IntoUnderlyingSource: IntoUnderlyingSource,
-	JsAccountUpdate: JsAccountUpdate,
-	JsStateSyncUpdate: JsStateSyncUpdate,
-	JsStorageMapEntry: JsStorageMapEntry,
-	JsStorageSlot: JsStorageSlot,
-	JsVaultAsset: JsVaultAsset,
-	Library: Library,
-	MerklePath: MerklePath,
-	NetworkId: NetworkId,
-	NetworkType: NetworkType,
-	Note: Note,
-	NoteAndArgs: NoteAndArgs,
-	NoteAndArgsArray: NoteAndArgsArray,
-	NoteArray: NoteArray,
-	NoteAssets: NoteAssets,
-	NoteAttachment: NoteAttachment,
-	NoteAttachmentKind: NoteAttachmentKind,
-	NoteAttachmentScheme: NoteAttachmentScheme,
-	NoteConsumability: NoteConsumability,
-	NoteConsumptionStatus: NoteConsumptionStatus,
-	NoteDetails: NoteDetails,
-	NoteDetailsAndTag: NoteDetailsAndTag,
-	NoteDetailsAndTagArray: NoteDetailsAndTagArray,
-	NoteExecutionHint: NoteExecutionHint,
-	NoteExportFormat: NoteExportFormat,
-	NoteFile: NoteFile,
-	NoteFilter: NoteFilter,
-	NoteFilterTypes: NoteFilterTypes,
-	NoteHeader: NoteHeader,
-	NoteId: NoteId,
-	NoteIdAndArgs: NoteIdAndArgs,
-	NoteIdAndArgsArray: NoteIdAndArgsArray,
-	NoteInclusionProof: NoteInclusionProof,
-	NoteLocation: NoteLocation,
-	NoteMetadata: NoteMetadata,
-	NoteRecipient: NoteRecipient,
-	NoteRecipientArray: NoteRecipientArray,
-	NoteScript: NoteScript,
-	NoteStorage: NoteStorage,
-	NoteSyncBlock: NoteSyncBlock,
-	NoteSyncInfo: NoteSyncInfo,
-	NoteTag: NoteTag,
-	NoteType: NoteType,
-	OutputNote: OutputNote,
-	OutputNoteArray: OutputNoteArray,
-	OutputNoteRecord: OutputNoteRecord,
-	OutputNoteState: OutputNoteState,
-	OutputNotes: OutputNotes,
-	Package: Package,
-	PartialNote: PartialNote,
-	Poseidon2: Poseidon2,
-	ProcedureThreshold: ProcedureThreshold,
-	Program: Program,
-	ProvenTransaction: ProvenTransaction,
-	PublicKey: PublicKey,
-	RpcClient: RpcClient,
-	Rpo256: Rpo256,
-	SerializedInputNoteData: SerializedInputNoteData,
-	SerializedOutputNoteData: SerializedOutputNoteData,
-	SerializedTransactionData: SerializedTransactionData,
-	Signature: Signature,
-	SigningInputs: SigningInputs,
-	SigningInputsType: SigningInputsType,
-	SlotAndKeys: SlotAndKeys,
-	SparseMerklePath: SparseMerklePath,
-	StorageMap: StorageMap,
-	StorageMapEntry: StorageMapEntry,
-	StorageMapInfo: StorageMapInfo,
-	StorageMapUpdate: StorageMapUpdate,
-	StorageSlot: StorageSlot,
-	StorageSlotArray: StorageSlotArray,
-	SyncSummary: SyncSummary,
-	TestUtils: TestUtils,
-	TokenSymbol: TokenSymbol,
-	TransactionArgs: TransactionArgs,
-	TransactionFilter: TransactionFilter,
-	TransactionId: TransactionId,
-	TransactionProver: TransactionProver,
-	TransactionRecord: TransactionRecord,
-	TransactionRequest: TransactionRequest,
-	TransactionRequestBuilder: TransactionRequestBuilder,
-	TransactionResult: TransactionResult,
-	TransactionScript: TransactionScript,
-	TransactionScriptInputPair: TransactionScriptInputPair,
-	TransactionScriptInputPairArray: TransactionScriptInputPairArray,
-	TransactionStatus: TransactionStatus,
-	TransactionStoreUpdate: TransactionStoreUpdate,
-	TransactionSummary: TransactionSummary,
-	WebClient: WebClient,
-	WebKeystoreApi: WebKeystoreApi,
-	Word: Word,
-	createAuthFalcon512RpoMultisig: createAuthFalcon512RpoMultisig,
-	default: __wbg_init,
-	exportStore: exportStore2,
-	importStore: importStore,
-	initSync: initSync,
-	initThreadPool: initThreadPool,
-	parallelSumBench: parallelSumBench,
-	rayonThreadCount: rayonThreadCount,
-	sequentialSumBench: sequentialSumBench,
-	setupLogging: setupLogging,
-	wbg_rayon_PoolBuilder: wbg_rayon_PoolBuilder,
-	wbg_rayon_start_worker: wbg_rayon_start_worker
-});
 
 const module$1 = new URL("assets/miden_client_web.wasm", import.meta.url);
 
-export { Account, AccountArray, AccountBuilder, AccountBuilderResult, AccountCode, AccountComponent, AccountComponentCode, AccountDelta, AccountFile, AccountHeader, AccountId, AccountIdArray, AccountInterface, AccountProof, AccountReader, AccountStatus, AccountStorage, AccountStorageDelta, AccountStorageMode, AccountStorageRequirements, AccountType, AccountVaultDelta, Address, AdviceInputs, AdviceMap, AssetVault, AuthFalcon512RpoMultisigConfig, AuthScheme, AuthSecretKey, BasicFungibleFaucetComponent, BlockHeader, CodeBuilder, CommittedNote, ConsumableNoteRecord, Endpoint, ExecutedTransaction, Felt, FeltArray, FetchedAccount, FetchedNote, FlattenedU8Vec, ForeignAccount, ForeignAccountArray, FungibleAsset, FungibleAssetDelta, FungibleAssetDeltaItem, GetProceduresResultItem, InputNote, InputNoteRecord, InputNoteState, InputNotes, IntoUnderlyingByteSource, IntoUnderlyingSink, IntoUnderlyingSource, JsAccountUpdate, JsStateSyncUpdate, JsStorageMapEntry, JsStorageSlot, JsVaultAsset, Library, MerklePath, NetworkId, NetworkType, Note, NoteAndArgs, NoteAndArgsArray, NoteArray, NoteAssets, NoteAttachment, NoteAttachmentKind, NoteAttachmentScheme, NoteConsumability, NoteConsumptionStatus, NoteDetails, NoteDetailsAndTag, NoteDetailsAndTagArray, NoteExecutionHint, NoteExportFormat, NoteFile, NoteFilter, NoteFilterTypes, NoteHeader, NoteId, NoteIdAndArgs, NoteIdAndArgsArray, NoteInclusionProof, NoteLocation, NoteMetadata, NoteRecipient, NoteRecipientArray, NoteScript, NoteStorage, NoteSyncBlock, NoteSyncInfo, NoteTag, NoteType, OutputNote, OutputNoteArray, OutputNoteRecord, OutputNoteState, OutputNotes, Package, PartialNote, Poseidon2, ProcedureThreshold, Program, ProvenTransaction, PublicKey, RpcClient, Rpo256, SerializedInputNoteData, SerializedOutputNoteData, SerializedTransactionData, Signature, SigningInputs, SigningInputsType, SlotAndKeys, SparseMerklePath, StorageMap, StorageMapEntry, StorageMapInfo, StorageMapUpdate, StorageSlot, StorageSlotArray, SyncSummary, TestUtils, TokenSymbol, TransactionArgs, TransactionFilter, TransactionId, TransactionProver, TransactionRecord, TransactionRequest, TransactionRequestBuilder, TransactionResult, TransactionScript, TransactionScriptInputPair, TransactionScriptInputPairArray, TransactionStatus, TransactionStoreUpdate, TransactionSummary, WebClient, WebKeystoreApi, Word, module$1 as __wasm_url, __wbg_init, createAuthFalcon512RpoMultisig, exportStore2 as exportStore, importStore, initSync, initThreadPool, parallelSumBench, rayonThreadCount, sequentialSumBench, setupLogging, wbg_rayon_PoolBuilder, wbg_rayon_start_worker };
-//# sourceMappingURL=Cargo-BkbbRVwR-B2ebg5sT.js.map
+export { Account, AccountArray, AccountBuilder, AccountBuilderResult, AccountCode, AccountComponent, AccountComponentCode, AccountDelta, AccountFile, AccountHeader, AccountId, AccountIdArray, AccountInterface, AccountProof, AccountReader, AccountStatus, AccountStorage, AccountStorageDelta, AccountStorageMode, AccountStorageRequirements, AccountType, AccountVaultDelta, Address, AdviceInputs, AdviceMap, AssetVault, AuthFalcon512RpoMultisigConfig, AuthScheme, AuthSecretKey, BasicFungibleFaucetComponent, BlockHeader, CodeBuilder, CommittedNote, ConsumableNoteRecord, Endpoint, ExecutedTransaction, Felt, FeltArray, FetchedAccount, FetchedNote, FlattenedU8Vec, ForeignAccount, ForeignAccountArray, FungibleAsset, FungibleAssetDelta, FungibleAssetDeltaItem, GetProceduresResultItem, InputNote, InputNoteRecord, InputNoteState, InputNotes, IntoUnderlyingByteSource, IntoUnderlyingSink, IntoUnderlyingSource, JsAccountUpdate, JsStateSyncUpdate, JsStorageMapEntry, JsStorageSlot, JsVaultAsset, Library, MerklePath, NetworkId, NetworkType, Note, NoteAndArgs, NoteAndArgsArray, NoteArray, NoteAssets, NoteAttachment, NoteAttachmentKind, NoteAttachmentScheme, NoteConsumability, NoteConsumptionStatus, NoteDetails, NoteDetailsAndTag, NoteDetailsAndTagArray, NoteExecutionHint, NoteExportFormat, NoteFile, NoteFilter, NoteFilterTypes, NoteHeader, NoteId, NoteIdAndArgs, NoteIdAndArgsArray, NoteInclusionProof, NoteLocation, NoteMetadata, NoteRecipient, NoteRecipientArray, NoteScript, NoteStorage, NoteSyncBlock, NoteSyncInfo, NoteTag, NoteType, OutputNote, OutputNoteArray, OutputNoteRecord, OutputNoteState, OutputNotes, Package, PartialNote, Poseidon2, ProcedureThreshold, Program, ProvenTransaction, PublicKey, RpcClient, Rpo256, SerializedInputNoteData, SerializedOutputNoteData, SerializedTransactionData, Signature, SigningInputs, SigningInputsType, SlotAndKeys, SparseMerklePath, StorageMap, StorageMapEntry, StorageMapInfo, StorageMapUpdate, StorageSlot, StorageSlotArray, SyncSummary, TestUtils, TokenSymbol, TransactionArgs, TransactionFilter, TransactionId, TransactionProver, TransactionRecord, TransactionRequest, TransactionRequestBuilder, TransactionResult, TransactionScript, TransactionScriptInputPair, TransactionScriptInputPairArray, TransactionStatus, TransactionStoreUpdate, TransactionSummary, WebClient, WebKeystoreApi, Word, module$1 as __wasm_url, __wbg_init, createAuthFalcon512RpoMultisig, exportStore2 as exportStore, importStore, initSync, sequentialSumBench, setupLogging };
+//# sourceMappingURL=Cargo-F4-uczDo-C4sL4cBi.js.map

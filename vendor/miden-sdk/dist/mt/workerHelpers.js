@@ -14,7 +14,7 @@ function waitForMsgType(target, type) {
   });
 }
 waitForMsgType(self, 'wasm_bindgen_worker_init').then(async ({ init, receiver }) => {
-  const pkg = await import('./Cargo-BkbbRVwR.js');
+  const pkg = await import('./Cargo-BNYOxQSv.js');
   // Our build exports __wbg_init by name (the [remove-wasm-tla] plugin adds
   // it back so loadWasm() can call it explicitly). Stock wasm-bindgen-rayon
   // expects pkg.default — not present here, since rollup-plugin-rust's

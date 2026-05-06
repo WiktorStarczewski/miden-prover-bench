@@ -23997,7 +23997,7 @@ function __wbg_get_imports(memory) {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue__wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(a, state0.b, arg0, arg1);
+                        return wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue__wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -24683,18 +24683,18 @@ function __wbg_get_imports(memory) {
             return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 103, function: Function { arguments: [Externref], shim_idx: 104, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9cf17b78bd51a2ed___closure__destroy___dyn_core_3058b10a1691ccb3___ops__function__FnMut__wasm_bindgen_9cf17b78bd51a2ed___JsValue____Output_______, wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 100, function: Function { arguments: [Externref], shim_idx: 101, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_d95d7c4a5cb06fc0___closure__destroy___dyn_core_91ed24bc3d45dfd0___ops__function__FnMut__wasm_bindgen_d95d7c4a5cb06fc0___JsValue____Output_______, wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 103, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 104, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9cf17b78bd51a2ed___closure__destroy___dyn_core_3058b10a1691ccb3___ops__function__FnMut__wasm_bindgen_9cf17b78bd51a2ed___JsValue____Output_______, wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 100, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 101, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_d95d7c4a5cb06fc0___closure__destroy___dyn_core_91ed24bc3d45dfd0___ops__function__FnMut__wasm_bindgen_d95d7c4a5cb06fc0___JsValue____Output_______, wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 103, function: Function { arguments: [], shim_idx: 389, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9cf17b78bd51a2ed___closure__destroy___dyn_core_3058b10a1691ccb3___ops__function__FnMut__wasm_bindgen_9cf17b78bd51a2ed___JsValue____Output_______, wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke______);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 100, function: Function { arguments: [], shim_idx: 359, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_d95d7c4a5cb06fc0___closure__destroy___dyn_core_91ed24bc3d45dfd0___ops__function__FnMut__wasm_bindgen_d95d7c4a5cb06fc0___JsValue____Output_______, wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke______);
             return ret;
         },
         __wbindgen_cast_0000000000000004: function(arg0) {
@@ -24813,16 +24813,16 @@ function __wbg_get_imports(memory) {
     };
 }
 
-function wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke______(arg0, arg1) {
-    wasm.wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke______(arg0, arg1);
+function wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke______(arg0, arg1) {
+    wasm.wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke______(arg0, arg1);
 }
 
-function wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2) {
-    wasm.wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2);
+function wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2) {
+    wasm.wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2);
 }
 
-function wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue__wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2, arg3) {
-    wasm.wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue__wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2, arg3);
+function wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue__wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2, arg3) {
+    wasm.wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue__wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2, arg3);
 }
 
 
@@ -25793,4 +25793,4 @@ var index = /*#__PURE__*/Object.freeze({
 
 const module$1 = new URL("assets/miden_client_web.wasm", import.meta.url);
 export {  Account, AccountArray, AccountBuilder, AccountBuilderResult, AccountCode, AccountComponent, AccountComponentCode, AccountDelta, AccountFile, AccountHeader, AccountId, AccountIdArray, AccountInterface, AccountProof, AccountReader, AccountStatus, AccountStorage, AccountStorageDelta, AccountStorageMode, AccountStorageRequirements, AccountType, AccountVaultDelta, Address, AdviceInputs, AdviceMap, AssetVault, AuthFalcon512RpoMultisigConfig, AuthScheme, AuthSecretKey, BasicFungibleFaucetComponent, BlockHeader, CodeBuilder, CommittedNote, ConsumableNoteRecord, Endpoint, ExecutedTransaction, Felt, FeltArray, FetchedAccount, FetchedNote, FlattenedU8Vec, ForeignAccount, ForeignAccountArray, FungibleAsset, FungibleAssetDelta, FungibleAssetDeltaItem, GetProceduresResultItem, InputNote, InputNoteRecord, InputNoteState, InputNotes, IntoUnderlyingByteSource, IntoUnderlyingSink, IntoUnderlyingSource, JsAccountUpdate, JsStateSyncUpdate, JsStorageMapEntry, JsStorageSlot, JsVaultAsset, Library, MerklePath, NetworkId, NetworkType, Note, NoteAndArgs, NoteAndArgsArray, NoteArray, NoteAssets, NoteAttachment, NoteAttachmentKind, NoteAttachmentScheme, NoteConsumability, NoteConsumptionStatus, NoteDetails, NoteDetailsAndTag, NoteDetailsAndTagArray, NoteExecutionHint, NoteExportFormat, NoteFile, NoteFilter, NoteFilterTypes, NoteHeader, NoteId, NoteIdAndArgs, NoteIdAndArgsArray, NoteInclusionProof, NoteLocation, NoteMetadata, NoteRecipient, NoteRecipientArray, NoteScript, NoteStorage, NoteSyncBlock, NoteSyncInfo, NoteTag, NoteType, OutputNote, OutputNoteArray, OutputNoteRecord, OutputNoteState, OutputNotes, Package, PartialNote, Poseidon2, ProcedureThreshold, Program, ProvenTransaction, PublicKey, RpcClient, Rpo256, SerializedInputNoteData, SerializedOutputNoteData, SerializedTransactionData, Signature, SigningInputs, SigningInputsType, SlotAndKeys, SparseMerklePath, StorageMap, StorageMapEntry, StorageMapInfo, StorageMapUpdate, StorageSlot, StorageSlotArray, SyncSummary, TestUtils, TokenSymbol, TransactionArgs, TransactionFilter, TransactionId, TransactionProver, TransactionRecord, TransactionRequest, TransactionRequestBuilder, TransactionResult, TransactionScript, TransactionScriptInputPair, TransactionScriptInputPairArray, TransactionStatus, TransactionStoreUpdate, TransactionSummary, WebClient, WebKeystoreApi, Word, createAuthFalcon512RpoMultisig, exportStore2 as exportStore, importStore, initSync, initThreadPool, parallelSumBench, rayonThreadCount, sequentialSumBench, setupLogging, wbg_rayon_PoolBuilder, wbg_rayon_start_worker , __wbg_init, module$1 as __wasm_url };
-//# sourceMappingURL=Cargo-BkbbRVwR.js.map
+//# sourceMappingURL=Cargo-BNYOxQSv.js.map

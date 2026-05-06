@@ -53,18 +53,24 @@ export default function Page() {
         <p style={{ color: "#9aa0a6", margin: 0, fontSize: 14 }}>
           Testnet · explicit local prover · SDK worker path enabled by default.
         </p>
+        <p style={{ color: "#6b7280", margin: "4px 0 0", fontSize: 12 }}>
+          Tip: switching tabs unmounts the previous panel — note the summary
+          before flipping. Run one variant at a time to avoid two SDK workers
+          competing for cores.
+        </p>
       </header>
 
       <Tabs variant={variant} onChange={setVariant} />
 
-      {/* Render BOTH panels and toggle visibility so each tab preserves its
-          own SDK module + accounts + log state across switches. */}
-      <div style={{ display: variant === "st" ? "block" : "none" }}>
-        <BenchPanel variant="st" />
-      </div>
-      <div style={{ display: variant === "mt" ? "block" : "none" }}>
-        <BenchPanel variant="mt" />
-      </div>
+      {/* Only mount the active variant's panel. We used to keep both mounted
+          and toggle CSS visibility, but if the user clicked Init on both,
+          two MidenClients and two SDK workers stayed alive (and on MT, each
+          worker spawns N rayon helpers). That contention serialized prove
+          work and pinned the system at >100% CPU per worker. Switching
+          tabs now unmounts the previous panel; React's GC reclaims the
+          worker shortly after. The trade-off is losing the previous tab's
+          log + summary on switch — note them externally before flipping. */}
+      <BenchPanel key={variant} variant={variant} />
     </main>
   );
 }

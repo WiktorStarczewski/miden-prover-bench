@@ -4,7 +4,7 @@
 async function loadWasm() {
   let wasmModule;
   if (!import.meta.env || (import.meta.env && !import.meta.env.SSR)) {
-    wasmModule = await import('./Cargo-BkbbRVwR.js');
+    wasmModule = await import('./Cargo-BNYOxQSv.js');
     // The Cargo glue's __wbg_init TLA is stripped by the rollup build to
     // prevent blocking WKWebView module evaluation. Call it explicitly here
     // with the WASM URL that the Cargo glue pre-resolves (relative to its

@@ -5,7 +5,7 @@
 async function loadWasm() {
   let wasmModule;
   if (!undefined || (undefined && !undefined.SSR)) {
-    wasmModule = await Promise.resolve().then(function () { return CargoBkbbRVwR; });
+    wasmModule = await Promise.resolve().then(function () { return CargoBNYOxQSv; });
     // The Cargo glue's __wbg_init TLA is stripped by the rollup build to
     // prevent blocking WKWebView module evaluation. Call it explicitly here
     // with the WASM URL that the Cargo glue pre-resolves (relative to its
@@ -24569,7 +24569,7 @@ function __wbg_get_imports(memory) {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue__wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(a, state0.b, arg0, arg1);
+                        return wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue__wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -25255,18 +25255,18 @@ function __wbg_get_imports(memory) {
             return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 103, function: Function { arguments: [Externref], shim_idx: 104, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9cf17b78bd51a2ed___closure__destroy___dyn_core_3058b10a1691ccb3___ops__function__FnMut__wasm_bindgen_9cf17b78bd51a2ed___JsValue____Output_______, wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 100, function: Function { arguments: [Externref], shim_idx: 101, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_d95d7c4a5cb06fc0___closure__destroy___dyn_core_91ed24bc3d45dfd0___ops__function__FnMut__wasm_bindgen_d95d7c4a5cb06fc0___JsValue____Output_______, wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 103, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 104, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9cf17b78bd51a2ed___closure__destroy___dyn_core_3058b10a1691ccb3___ops__function__FnMut__wasm_bindgen_9cf17b78bd51a2ed___JsValue____Output_______, wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 100, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 101, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_d95d7c4a5cb06fc0___closure__destroy___dyn_core_91ed24bc3d45dfd0___ops__function__FnMut__wasm_bindgen_d95d7c4a5cb06fc0___JsValue____Output_______, wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 103, function: Function { arguments: [], shim_idx: 389, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9cf17b78bd51a2ed___closure__destroy___dyn_core_3058b10a1691ccb3___ops__function__FnMut__wasm_bindgen_9cf17b78bd51a2ed___JsValue____Output_______, wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke______);
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 100, function: Function { arguments: [], shim_idx: 359, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_d95d7c4a5cb06fc0___closure__destroy___dyn_core_91ed24bc3d45dfd0___ops__function__FnMut__wasm_bindgen_d95d7c4a5cb06fc0___JsValue____Output_______, wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke______);
             return ret;
         },
         __wbindgen_cast_0000000000000004: function(arg0) {
@@ -25385,16 +25385,16 @@ function __wbg_get_imports(memory) {
     };
 }
 
-function wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke______(arg0, arg1) {
-    wasm.wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke______(arg0, arg1);
+function wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke______(arg0, arg1) {
+    wasm.wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke______(arg0, arg1);
 }
 
-function wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2) {
-    wasm.wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2);
+function wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2) {
+    wasm.wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2);
 }
 
-function wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue__wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2, arg3) {
-    wasm.wasm_bindgen_9cf17b78bd51a2ed___convert__closures_____invoke___wasm_bindgen_9cf17b78bd51a2ed___JsValue__wasm_bindgen_9cf17b78bd51a2ed___JsValue_____(arg0, arg1, arg2, arg3);
+function wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue__wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2, arg3) {
+    wasm.wasm_bindgen_d95d7c4a5cb06fc0___convert__closures_____invoke___wasm_bindgen_d95d7c4a5cb06fc0___JsValue__wasm_bindgen_d95d7c4a5cb06fc0___JsValue_____(arg0, arg1, arg2, arg3);
 }
 
 
@@ -26365,7 +26365,7 @@ var index = /*#__PURE__*/Object.freeze({
 
 const module$1 = new URL("assets/miden_client_web.wasm", self.location.href);
 
-var CargoBkbbRVwR = /*#__PURE__*/Object.freeze({
+var CargoBNYOxQSv = /*#__PURE__*/Object.freeze({
   __proto__: null,
   Account: Account,
   AccountArray: AccountArray,
