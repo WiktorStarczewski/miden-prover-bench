@@ -33,15 +33,24 @@ type CyclesSummary = {
 
 type PhaseStats = {
   count: number;
-  avg: number;
   median: number;
-  min: number;
-  max: number;
+  p25: number;
+  p75: number;
+  iqr: number;
   total: number;
   samples: number[];
 };
 
 const NUM_CYCLES_DEFAULT = 10;
+
+// Cooldown between cycles (ms). Lets Apple-Silicon-class SoCs drop
+// temperature so the rayon worker doesn't get migrated off P-cores by
+// macOS's scheduler mid-cycle. Each cycle is heavy WASM SIMD compute;
+// without a cooldown the 5th-10th cycle frequently runs at 2-5× the
+// median because the worker lands on E-cores. 1500ms is empirical —
+// enough to drop temp on M-series, not so long that the bench becomes
+// tedious.
+const COOLDOWN_MS = 1500;
 
 export default function Page() {
   const [variant, setVariant] = useState<SdkVariant>("st");
@@ -489,6 +498,14 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
         console.log(
           `[proving-timing] info variant=${variant} cycle ${i} consume submitted txId=${result.txId?.toHex() ?? "(none)"} remaining=${result.remaining}`
         );
+
+        // Cooldown — see COOLDOWN_MS comment. Skip after the last cycle.
+        if (i < numCycles && COOLDOWN_MS > 0) {
+          console.log(
+            `[proving-timing] info variant=${variant} cycle ${i} cooldown ${COOLDOWN_MS}ms`
+          );
+          await new Promise((r) => setTimeout(r, COOLDOWN_MS));
+        }
       }
 
       samplePhaseRef.current = null;
@@ -660,23 +677,27 @@ function SummaryPanel({ summary, variant }: { summary: CyclesSummary; variant: S
 }
 
 function renderTable(s: CyclesSummary): string {
-  const header = "phase    | n  |   avg ms |   med ms |   min ms |   max ms | total ms";
+  // Median + IQR is robust to thermal-throttle outliers (which Apple-Silicon
+  // hits hard on cycles 5-10 of sustained WASM proving). Tail values
+  // (avg/min/max) get pulled by those and don't represent typical-case
+  // experience. p25..p75 gives the spread of the *bulk* of the distribution.
+  const header = "phase    | n  |   med ms |   p25 ms |   p75 ms |   iqr ms | total ms";
   const sep = "---------+----+----------+----------+----------+----------+----------";
   const send = formatRow("send", s.send);
   const consume = formatRow("consume", s.consume);
-  const totalAvg = (s.send.avg + s.consume.avg).toFixed(1);
-  const grand = `combined avg per cycle (send + consume): ${totalAvg} ms`;
+  const totalMed = (s.send.median + s.consume.median).toFixed(1);
+  const grand = `combined median per cycle (send + consume): ${totalMed} ms`;
   return [header, sep, send, consume, "", grand].join("\n");
 }
 
 function formatRow(phase: string, p: PhaseStats): string {
   const cell = (n: number) => n.toFixed(1).padStart(8);
   const nCell = String(p.count).padStart(2);
-  return `${phase.padEnd(8)} | ${nCell} | ${cell(p.avg)} | ${cell(p.median)} | ${cell(p.min)} | ${cell(p.max)} | ${cell(p.total)}`;
+  return `${phase.padEnd(8)} | ${nCell} | ${cell(p.median)} | ${cell(p.p25)} | ${cell(p.p75)} | ${cell(p.iqr)} | ${cell(p.total)}`;
 }
 
 function formatSummaryLine(s: CyclesSummary): string {
-  return `send avg=${s.send.avg.toFixed(1)}ms (n=${s.send.count}); consume avg=${s.consume.avg.toFixed(1)}ms (n=${s.consume.count})`;
+  return `send median=${s.send.median.toFixed(1)}ms (n=${s.send.count}, iqr=${s.send.iqr.toFixed(0)}ms); consume median=${s.consume.median.toFixed(1)}ms (n=${s.consume.count}, iqr=${s.consume.iqr.toFixed(0)}ms)`;
 }
 
 function summarize(samples: CycleSample[], cycles: number): CyclesSummary {
@@ -689,21 +710,34 @@ function summarize(samples: CycleSample[], cycles: number): CyclesSummary {
   };
 }
 
+// Linear-interpolation quantile (type-7 / Excel default). Standard for
+// "what value sits at the q-th percentile of this distribution".
+function quantile(sorted: number[], q: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0];
+  const pos = q * (sorted.length - 1);
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  if (lo === hi) return sorted[lo];
+  const frac = pos - lo;
+  return sorted[lo] * (1 - frac) + sorted[hi] * frac;
+}
+
 function stats(samples: number[]): PhaseStats {
   if (samples.length === 0) {
-    return { count: 0, avg: 0, median: 0, min: 0, max: 0, total: 0, samples };
+    return { count: 0, median: 0, p25: 0, p75: 0, iqr: 0, total: 0, samples };
   }
   const sorted = [...samples].sort((a, b) => a - b);
   const total = sorted.reduce((a, b) => a + b, 0);
-  const avg = total / sorted.length;
-  const mid = Math.floor(sorted.length / 2);
-  const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  const median = quantile(sorted, 0.5);
+  const p25 = quantile(sorted, 0.25);
+  const p75 = quantile(sorted, 0.75);
   return {
     count: sorted.length,
-    avg,
     median,
-    min: sorted[0],
-    max: sorted[sorted.length - 1],
+    p25,
+    p75,
+    iqr: p75 - p25,
     total,
     samples: sorted,
   };
