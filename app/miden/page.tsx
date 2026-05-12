@@ -140,6 +140,7 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
   // as a CycleSample tagged with this cycle/phase. Cleared between cycle stages.
   const samplePhaseRef = useRef<{ cycle: number; phase: "send" | "consume" } | null>(null);
   const cycleSamplesRef = useRef<CycleSample[]>([]);
+  const totalTimesRef = useRef<number[]>([]); // total time per send cycle (sync+prove+submit)
 
   // Intercept console.log so [proving-timing] lines appear in the panel log,
   // and so we can attribute `outer` durations to the active cycle phase.
@@ -486,6 +487,7 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
     setPhase("cycles");
     setSummary(null);
     cycleSamplesRef.current = [];
+    totalTimesRef.current = [];
 
     try {
       const sdk = await loadSdk();
@@ -502,7 +504,9 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
         // ── send phase ─────────────────────────────────────────────────
         samplePhaseRef.current = { cycle: i, phase: "send" };
         console.log(`[proving-timing] info variant=${variant} cycle ${i}/${numCycles} send wallet -> recipient (1, public)`);
+        const tTotal = performance.now();
         await client.sync();
+        const tSync = performance.now() - tTotal;
         const { txId: sendTxId } = await client.transactions.send({
           account: wallet,
           to: recipient,
@@ -511,7 +515,9 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
           type: "public",
           prover: localProver,
         });
-        console.log(`[proving-timing] info variant=${variant} cycle ${i} send submitted txId=${sendTxId.toHex()}`);
+        const totalSendMs = performance.now() - tTotal;
+        totalTimesRef.current.push(totalSendMs);
+        console.log(`[proving-timing] info variant=${variant} cycle ${i} send submitted txId=${sendTxId.toHex()} syncMs=${tSync.toFixed(0)} totalMs=${totalSendMs.toFixed(0)}`);
 
         // ── consume phase (recipient consumes the just-sent note) ──────
         samplePhaseRef.current = { cycle: i, phase: "consume" };
@@ -539,6 +545,11 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
       const summary = summarize(cycleSamplesRef.current, numCycles);
       setSummary(summary);
       console.log(`[proving-timing] info variant=${variant} cycles complete — ${formatSummaryLine(summary)}`);
+      // Compute total time stats (sync + prove + submit)
+      const totalSorted = [...totalTimesRef.current].sort((a, b) => a - b);
+      const totalMedian = totalSorted.length > 0
+        ? totalSorted[Math.floor(totalSorted.length / 2)]
+        : summary.send.median;
       saveBenchResult({
         ecosystem: "miden",
         variant,
@@ -548,6 +559,8 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
         iqr: summary.send.iqr,
         n: summary.send.count,
         samples: summary.send.samples,
+        blockWaitMs: Math.max(0, totalMedian - summary.send.median),
+        totalMs: totalMedian,
         timestamp: Date.now(),
       });
       setPhase("done");

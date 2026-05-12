@@ -38,12 +38,14 @@ const BENCHMARKS = [
 type BenchResult = {
   ecosystem: string;
   variant: string;
-  median: number;
+  median: number;       // prove-only median (ms)
   p25: number;
   p75: number;
   iqr: number;
   n: number;
   samples: number[];
+  blockWaitMs?: number; // median block inclusion wait (ms)
+  totalMs?: number;     // prove + block wait (ms)
   timestamp: number;
 };
 
@@ -338,6 +340,11 @@ export default function HomePage() {
   );
 }
 
+function fmt(ms: number): string {
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${ms.toFixed(0)}ms`;
+}
+
 function ComparisonTable({
   results,
 }: {
@@ -346,8 +353,18 @@ function ComparisonTable({
   const ecosystems = BENCHMARKS.map((b) => b.key).filter((k) => results[k]);
   if (ecosystems.length === 0) return null;
 
-  const medians = ecosystems.map((k) => results[k].median);
-  const fastest = Math.min(...medians);
+  const totals = ecosystems.map((k) => results[k].totalMs ?? results[k].median);
+  const fastestTotal = Math.min(...totals);
+  const fastestProve = Math.min(...ecosystems.map((k) => results[k].median));
+
+  const thStyle = {
+    textAlign: "right" as const,
+    padding: "8px 10px",
+    color: "#9aa0a6",
+    fontSize: 11,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+  };
 
   return (
     <div style={{ overflowX: "auto" }}>
@@ -360,53 +377,59 @@ function ComparisonTable({
         }}
       >
         <thead>
-          <tr
-            style={{
-              borderBottom: "1px solid rgba(255,255,255,0.1)",
-              color: "#9aa0a6",
-              fontSize: 11,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            <th style={{ textAlign: "left", padding: "8px 12px" }}>Ecosystem</th>
-            <th style={{ textAlign: "right", padding: "8px 12px" }}>Median</th>
-            <th style={{ textAlign: "right", padding: "8px 12px" }}>p25</th>
-            <th style={{ textAlign: "right", padding: "8px 12px" }}>p75</th>
-            <th style={{ textAlign: "right", padding: "8px 12px" }}>IQR</th>
-            <th style={{ textAlign: "right", padding: "8px 12px" }}>n</th>
-            <th style={{ textAlign: "left", padding: "8px 12px" }}>Variant</th>
+          <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+            <th style={{ ...thStyle, textAlign: "left" }}>Ecosystem</th>
+            <th style={thStyle}>Prove</th>
+            <th style={thStyle}>Block wait</th>
+            <th style={thStyle}>Total</th>
+            <th style={thStyle}>n</th>
+            <th style={{ ...thStyle, textAlign: "left" }}>Mode</th>
           </tr>
         </thead>
         <tbody>
           {ecosystems.map((key) => {
             const r = results[key];
             const b = BENCHMARKS.find((x) => x.key === key)!;
-            const isFastest = r.median === fastest && ecosystems.length > 1;
+            const total = r.totalMs ?? r.median;
+            const blockWait = r.blockWaitMs ?? 0;
+            const isFastestProve = r.median === fastestProve && ecosystems.length > 1;
+            const isFastestTotal = total === fastestTotal && ecosystems.length > 1;
             return (
               <tr
                 key={key}
-                style={{
-                  borderBottom: "1px solid rgba(255,255,255,0.05)",
-                  color: isFastest ? "#7ee0a3" : "#e6e6e6",
-                }}
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
               >
-                <td style={{ padding: "10px 12px", fontWeight: 600, color: b.color }}>
+                <td style={{ padding: "10px 10px", fontWeight: 600, color: b.color }}>
                   {b.name}
-                  {isFastest && (
-                    <span style={{ marginLeft: 8, fontSize: 10, color: "#7ee0a3", fontWeight: 400 }}>
-                      fastest
-                    </span>
+                </td>
+                <td style={{
+                  textAlign: "right", padding: "10px 10px",
+                  fontWeight: 700, fontSize: 15,
+                  color: isFastestProve ? "#7ee0a3" : "#e6e6e6",
+                }}>
+                  {fmt(r.median)}
+                  {isFastestProve && (
+                    <span style={{ marginLeft: 6, fontSize: 9, color: "#7ee0a3", fontWeight: 400 }}>fastest</span>
                   )}
                 </td>
-                <td style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, fontSize: 15 }}>
-                  {r.median.toFixed(0)} ms
+                <td style={{
+                  textAlign: "right", padding: "10px 10px",
+                  color: blockWait > 0 ? "#f0a060" : "#4a5568",
+                }}>
+                  {blockWait > 0 ? fmt(blockWait) : "—"}
                 </td>
-                <td style={{ textAlign: "right", padding: "10px 12px", color: "#9aa0a6" }}>{r.p25.toFixed(0)}</td>
-                <td style={{ textAlign: "right", padding: "10px 12px", color: "#9aa0a6" }}>{r.p75.toFixed(0)}</td>
-                <td style={{ textAlign: "right", padding: "10px 12px", color: "#9aa0a6" }}>{r.iqr.toFixed(0)}</td>
-                <td style={{ textAlign: "right", padding: "10px 12px", color: "#9aa0a6" }}>{r.n}</td>
-                <td style={{ padding: "10px 12px", color: "#9aa0a6", fontSize: 12 }}>{r.variant}</td>
+                <td style={{
+                  textAlign: "right", padding: "10px 10px",
+                  fontWeight: 600, fontSize: 14,
+                  color: isFastestTotal ? "#7ee0a3" : "#d8dee5",
+                }}>
+                  {fmt(total)}
+                  {isFastestTotal && (
+                    <span style={{ marginLeft: 6, fontSize: 9, color: "#7ee0a3", fontWeight: 400 }}>fastest</span>
+                  )}
+                </td>
+                <td style={{ textAlign: "right", padding: "10px 10px", color: "#9aa0a6" }}>{r.n}</td>
+                <td style={{ padding: "10px 10px", color: "#9aa0a6", fontSize: 12 }}>{r.variant}</td>
               </tr>
             );
           })}

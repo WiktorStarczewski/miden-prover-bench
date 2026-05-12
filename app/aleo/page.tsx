@@ -429,6 +429,8 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
         iqr: summary.transfer.iqr,
         n: summary.transfer.count,
         samples: summary.transfer.samples,
+        blockWaitMs: 0, // tx not submitted, no block wait
+        totalMs: summary.transfer.median, // prove = total
         timestamp: Date.now(),
       });
       setPhase("done");

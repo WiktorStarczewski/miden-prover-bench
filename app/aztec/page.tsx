@@ -94,6 +94,8 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
   const [cycleProgress, setCycleProgress] = useState<{ current: number; total: number } | null>(null);
   const [hasSetup, setHasSetup] = useState(() => !!loadSetup());
 
+  const blockWaitTimesRef = useRef<number[]>([]);
+
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const walletRef = useRef<any>(null);
   const tokenRef = useRef<any>(null);
@@ -351,6 +353,7 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
     setPhase("cycles");
     setSummary(null);
     cycleSamplesRef.current = [];
+    blockWaitTimesRef.current = [];
 
     try {
       const variant = `aztec-${threadMode}`;
@@ -385,12 +388,17 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
           } catch { /* keep polling */ }
           if (performance.now() - tWait > 5 * 60_000) break;
         }
-        log(`info variant=${variant} cycle ${i} block inclusion took ${((performance.now() - tWait) / 1000).toFixed(0)}s`);
+        const blockMs = performance.now() - tWait;
+        blockWaitTimesRef.current.push(blockMs);
+        log(`info variant=${variant} cycle ${i} block inclusion took ${(blockMs / 1000).toFixed(0)}s`);
       }
 
       const summary = summarize(cycleSamplesRef.current, numCycles);
       setSummary(summary);
-      log(`info variant=${variant} cycles complete — ${formatSummaryLine(summary)}`);
+      // Compute block wait median
+      const blockSorted = [...blockWaitTimesRef.current].sort((a, b) => a - b);
+      const blockMedian = blockSorted.length > 0 ? blockSorted[Math.floor(blockSorted.length / 2)] : 0;
+      log(`info variant=${variant} cycles complete — ${formatSummaryLine(summary)} blockWait median=${(blockMedian / 1000).toFixed(0)}s`);
       saveBenchResult({
         ecosystem: "aztec",
         variant,
@@ -400,6 +408,8 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
         iqr: summary.transfer.iqr,
         n: summary.transfer.count,
         samples: summary.transfer.samples,
+        blockWaitMs: blockMedian,
+        totalMs: summary.transfer.median + blockMedian,
         timestamp: Date.now(),
       });
       setPhase("done");
