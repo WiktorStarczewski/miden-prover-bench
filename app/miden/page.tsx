@@ -54,7 +54,14 @@ const NUM_CYCLES_DEFAULT = 10;
 const COOLDOWN_MS = 1500;
 
 export default function Page() {
-  const [variant, setVariant] = useState<SdkVariant>("st");
+  // Default to MT; autorun always uses MT
+  const [variant, setVariant] = useState<SdkVariant>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get("variant") === "st") return "st";
+    }
+    return "mt";
+  });
 
   return (
     <main style={{ maxWidth: 1040, margin: "0 auto" }}>
