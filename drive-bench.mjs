@@ -48,7 +48,7 @@ page.on('console', (msg) => {
   if (m) samples.push({ variant: m[1], duration_ms: Number(m[2]) });
 });
 
-await page.goto('http://localhost:3000', { waitUntil: 'load' });
+await page.goto('http://localhost:3000/miden/', { waitUntil: 'load' });
 
 // Sanity check — wait for crossOriginIsolated and the variant tabs.
 await page.waitForFunction(() => crossOriginIsolated === true, null, { timeout: 30_000 });

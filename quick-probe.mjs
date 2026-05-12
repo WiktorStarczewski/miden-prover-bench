@@ -3,7 +3,7 @@ const browser = await chromium.launch({ headless: true, args: ['--enable-feature
 const ctx = await browser.newContext();
 const page = await ctx.newPage();
 page.on('console', m => console.log(`[${m.type()}]`, m.text()));
-await page.goto('http://localhost:3000');
+await page.goto('http://localhost:3000/miden/');
 await page.waitForFunction(() => crossOriginIsolated === true);
 await page.locator('.tab-btn').filter({ hasText: 'Multi-threaded' }).click();
 await page.locator('.seg button').filter({ hasText: /^ECDSA$/ }).click();
