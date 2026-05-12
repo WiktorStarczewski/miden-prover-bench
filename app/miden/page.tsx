@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { installOuterProveTiming, type SdkVariant } from "../lib/timing";
+import { saveBenchResult } from "../lib/results";
 
 // Both subpaths re-export the same surface from a shared crate; we just pick
 // the type alias from one of them. Runtime imports below are variant-aware.
@@ -530,6 +531,17 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
       const summary = summarize(cycleSamplesRef.current, numCycles);
       setSummary(summary);
       console.log(`[proving-timing] info variant=${variant} cycles complete — ${formatSummaryLine(summary)}`);
+      saveBenchResult({
+        ecosystem: "miden",
+        variant,
+        median: summary.send.median,
+        p25: summary.send.p25,
+        p75: summary.send.p75,
+        iqr: summary.send.iqr,
+        n: summary.send.count,
+        samples: summary.send.samples,
+        timestamp: Date.now(),
+      });
       setPhase("done");
     } catch (e) {
       samplePhaseRef.current = null;

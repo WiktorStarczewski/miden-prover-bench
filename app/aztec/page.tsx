@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { saveBenchResult } from "../lib/results";
 
 type Phase =
   | "idle"
@@ -394,6 +395,17 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
       log(
         `info variant=${variant} cycles complete — ${formatSummaryLine(summary)}`
       );
+      saveBenchResult({
+        ecosystem: "aztec",
+        variant,
+        median: summary.transfer.median,
+        p25: summary.transfer.p25,
+        p75: summary.transfer.p75,
+        iqr: summary.transfer.iqr,
+        n: summary.transfer.count,
+        samples: summary.transfer.samples,
+        timestamp: Date.now(),
+      });
       setPhase("done");
     } catch (e) {
       console.error(e);

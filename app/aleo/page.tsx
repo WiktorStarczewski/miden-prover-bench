@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { saveBenchResult } from "../lib/results";
 // Worker messages — must match public/aleo-sdk/bench-worker.js protocol
 // Persistent testnet bench account — fund this address with testnet credits
 const BENCH_PRIVATE_KEY =
@@ -418,6 +419,17 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
       log(
         `info variant=${variant} cycles complete — ${formatSummaryLine(summary)}`
       );
+      saveBenchResult({
+        ecosystem: "aleo",
+        variant,
+        median: summary.transfer.median,
+        p25: summary.transfer.p25,
+        p75: summary.transfer.p75,
+        iqr: summary.transfer.iqr,
+        n: summary.transfer.count,
+        samples: summary.transfer.samples,
+        timestamp: Date.now(),
+      });
       setPhase("done");
     } catch (e) {
       console.error(e);
