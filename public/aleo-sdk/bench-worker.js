@@ -103,6 +103,13 @@ async function handleTransferOnChain(recipient, amountCredits, priorityFee) {
   if (!cachedProvingKey) throw new Error("Keys not fetched");
   const wasm = mod;
 
+  // Quick latency check on the API
+  const tPing = performance.now();
+  try {
+    await fetch(TESTNET_API + "/testnet/block/height/latest");
+    log(`worker: API latency: ${(performance.now() - tPing).toFixed(0)}ms`);
+  } catch (e) { log(`worker: API ping failed: ${e}`); }
+
   log(`worker: buildTransferTransaction (transfer_public, ${amountCredits} credits -> ${recipient.slice(0, 16)}...)`);
   const t0 = performance.now();
   const tx = await wasm.ProgramManager.buildTransferTransaction(

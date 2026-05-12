@@ -296,19 +296,39 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
       const variant = `aztec-${threadMode}`;
       log(`info variant=${variant} private transfer (Alice -> Bob, 10 tokens)`);
 
-      // Send and wait for inclusion (required — Aztec's UTXO model needs
-      // each tx to be mined before the next can spend updated notes).
-      // We time the full send including block wait. The prove portion is
-      // ~15s; the rest is block inclusion (~72s on testnet).
+      // Time only simulate+prove+submit (NO_WAIT), then wait for mining
+      // separately so the PXE state is updated for the next transfer.
       const t0 = performance.now();
-      await tokenRef.current.methods
+      const result = await (tokenRef.current.methods
         .transfer(bobRef.current, 10n)
-        .send({
+        .send as any)({
           from: aliceRef.current,
           fee: { paymentMethod: feePaymentRef.current },
+          wait: "NO_WAIT",
         });
       const ms = performance.now() - t0;
-      log(`outer variant=${variant} prover=local duration_ms=${ms.toFixed(1)} (includes ~72s block wait)`);
+      log(`outer variant=${variant} prover=local duration_ms=${ms.toFixed(1)}`);
+
+      // Now wait for mining so PXE sees updated notes (not timed)
+      log(`info variant=${variant} waiting for block inclusion...`);
+      const tWait = performance.now();
+      // result.txHash is available from NO_WAIT
+      // Use a simple poll since waitForTx may not be directly importable
+      while (true) {
+        await new Promise(r => setTimeout(r, 10_000));
+        try {
+          const node = walletRef.current.getAztecNode?.() || walletRef.current.aztecNode;
+          if (node && result.txHash) {
+            const effect = await node.getTxEffect(result.txHash);
+            if (effect) break;
+          }
+        } catch { /* keep polling */ }
+        if (performance.now() - tWait > 5 * 60_000) {
+          log(`info variant=${variant} block wait timed out after 5min`);
+          break;
+        }
+      }
+      log(`info variant=${variant} block inclusion took ${((performance.now() - tWait) / 1000).toFixed(0)}s`);
       setPhase("done");
       return true;
     } catch (e) {
@@ -338,17 +358,34 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
         setCycleProgress({ current: i, total: numCycles });
         log(`info variant=${variant} cycle ${i}/${numCycles} private transfer`);
 
+        // Time simulate+prove+submit only (NO_WAIT)
         const t0 = performance.now();
-        await tokenRef.current.methods
+        const result = await (tokenRef.current.methods
           .transfer(bobRef.current, 1n)
-          .send({
+          .send as any)({
             from: aliceRef.current,
             fee: { paymentMethod: feePaymentRef.current },
+            wait: "NO_WAIT",
           });
         const ms = performance.now() - t0;
-        log(`outer variant=${variant} prover=local duration_ms=${ms.toFixed(1)} (includes block wait)`);
+        log(`outer variant=${variant} prover=local duration_ms=${ms.toFixed(1)}`);
         cycleSamplesRef.current.push({ cycle: i, durationMs: ms });
-        // No cooldown needed — block wait already provides cooling
+
+        // Wait for mining before next cycle (not timed)
+        log(`info variant=${variant} cycle ${i} waiting for block inclusion...`);
+        const tWait = performance.now();
+        while (true) {
+          await new Promise(r => setTimeout(r, 10_000));
+          try {
+            const node = walletRef.current.getAztecNode?.() || walletRef.current.aztecNode;
+            if (node && result.txHash) {
+              const effect = await node.getTxEffect(result.txHash);
+              if (effect) break;
+            }
+          } catch { /* keep polling */ }
+          if (performance.now() - tWait > 5 * 60_000) break;
+        }
+        log(`info variant=${variant} cycle ${i} block inclusion took ${((performance.now() - tWait) / 1000).toFixed(0)}s`);
       }
 
       const summary = summarize(cycleSamplesRef.current, numCycles);
