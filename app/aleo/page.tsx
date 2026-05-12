@@ -52,6 +52,7 @@ export default function AleoPage() {
 
   return (
     <main style={{ maxWidth: 1040, margin: "0 auto" }}>
+      <a href="/" style={{ color: "#6b7280", fontSize: 13, textDecoration: "none" }}>&larr; Dashboard</a>
       <header style={{ marginBottom: 18 }}>
         <h1>Aleo Proving Bench</h1>
         <p style={{ color: "#9aa0a6", margin: 0, fontSize: 14 }}>

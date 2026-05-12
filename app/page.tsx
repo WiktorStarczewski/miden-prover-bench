@@ -69,11 +69,23 @@ function quantile(sorted: number[], q: number): number {
 export default function HomePage() {
   const [results, setResults] = useState<BenchResult[]>([]);
 
-  // Poll localStorage for results from bench pages
+  // Read localStorage on mount, on visibility change, and poll periodically
   useEffect(() => {
-    setResults(loadResults());
-    const interval = setInterval(() => setResults(loadResults()), 2000);
-    return () => clearInterval(interval);
+    const refresh = () => setResults(loadResults());
+    refresh();
+    const interval = setInterval(refresh, 2000);
+    // Also refresh when user switches back to this tab
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    // Refresh on popstate (browser back button)
+    window.addEventListener("popstate", refresh);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("popstate", refresh);
+    };
   }, []);
 
   function clearResults() {
