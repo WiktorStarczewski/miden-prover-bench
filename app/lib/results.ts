@@ -21,10 +21,31 @@ export function saveBenchResult(result: BenchResult) {
       localStorage.getItem(STORAGE_KEY) || "[]"
     );
     existing.push(result);
-    // Keep only last 50 results
     const trimmed = existing.slice(-50);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
   } catch {
     // localStorage unavailable
   }
+
+  // Notify parent window (if running in iframe from dashboard "Run All")
+  try {
+    if (window.parent !== window) {
+      window.parent.postMessage(
+        {
+          type: "bench-done",
+          ecosystem: result.ecosystem,
+          median: result.median,
+        },
+        "*"
+      );
+    }
+  } catch {
+    // cross-origin or no parent
+  }
+}
+
+// Check if ?autorun=1 is in the URL
+export function isAutorun(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("autorun") === "1";
 }

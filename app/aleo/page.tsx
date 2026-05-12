@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { saveBenchResult } from "../lib/results";
+import { saveBenchResult, isAutorun } from "../lib/results";
 // Worker messages — must match public/aleo-sdk/bench-worker.js protocol
 // Persistent testnet bench account — fund this address with testnet credits
 const BENCH_PRIVATE_KEY =
@@ -52,7 +52,7 @@ export default function AleoPage() {
 
   return (
     <main style={{ maxWidth: 1040, margin: "0 auto" }}>
-      <a href="/" style={{ color: "#6b7280", fontSize: 13, textDecoration: "none" }}>&larr; Dashboard</a>
+      <a href={(process.env.NEXT_PUBLIC_BASE_PATH || "") + "/"} style={{ color: "#6b7280", fontSize: 13, textDecoration: "none" }}>&larr; Dashboard</a>
       <header style={{ marginBottom: 18 }}>
         <h1>Aleo Proving Bench</h1>
         <p style={{ color: "#9aa0a6", margin: 0, fontSize: 14 }}>
@@ -446,6 +446,19 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
     if (!(await init())) return;
     await runTransfer();
   }
+
+  // Autorun: if ?autorun=1, run all + cycles automatically
+  const autoranRef = useRef(false);
+  useEffect(() => {
+    if (autoranRef.current || !isAutorun()) return;
+    autoranRef.current = true;
+    (async () => {
+      if (!(await init())) return;
+      if (!(await runTransfer())) return;
+      await runCycles(NUM_CYCLES_DEFAULT);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const busy = phase !== "idle" && phase !== "done";
   const cycleReady = initialized;

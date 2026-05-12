@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const BENCHMARKS = [
   {
@@ -49,51 +51,117 @@ const STORAGE_KEY = "zk-bench-results";
 
 function loadResults(): BenchResult[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
   } catch {
     return [];
   }
 }
 
-function quantile(sorted: number[], q: number): number {
-  if (sorted.length === 0) return 0;
-  if (sorted.length === 1) return sorted[0];
-  const pos = q * (sorted.length - 1);
-  const lo = Math.floor(pos);
-  const hi = Math.ceil(pos);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] * (1 - (pos - lo)) + sorted[hi] * (pos - lo);
-}
-
 export default function HomePage() {
   const [results, setResults] = useState<BenchResult[]>([]);
+  const [running, setRunning] = useState<string | null>(null); // ecosystem key or null
+  const [runLog, setRunLog] = useState<string[]>([]);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // Read localStorage on mount, on visibility change, and poll periodically
+  const refresh = useCallback(() => setResults(loadResults()), []);
+
   useEffect(() => {
-    const refresh = () => setResults(loadResults());
     refresh();
     const interval = setInterval(refresh, 2000);
-    // Also refresh when user switches back to this tab
-    const onVisibility = () => {
+    const onVis = () => {
       if (document.visibilityState === "visible") refresh();
     };
-    document.addEventListener("visibilitychange", onVisibility);
-    // Refresh on popstate (browser back button)
-    window.addEventListener("popstate", refresh);
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("popstate", refresh);
+      document.removeEventListener("visibilitychange", onVis);
     };
-  }, []);
+  }, [refresh]);
 
   function clearResults() {
     localStorage.removeItem(STORAGE_KEY);
     setResults([]);
   }
 
-  // Group latest result per ecosystem
+  // Run all benchmarks sequentially via hidden iframes.
+  // Each bench page detects ?autorun=1 and runs init → run all → 10 cycles,
+  // then posts "bench-done" to the parent via postMessage.
+  async function runAll() {
+    setRunLog([]);
+    for (const b of BENCHMARKS) {
+      setRunning(b.key);
+      setRunLog((prev) => [...prev, `Starting ${b.name}...`]);
+
+      await new Promise<void>((resolve) => {
+        // Listen for completion message from the iframe
+        const onMessage = (e: MessageEvent) => {
+          if (e.data?.type === "bench-done" && e.data?.ecosystem === b.key) {
+            window.removeEventListener("message", onMessage);
+            refresh();
+            setRunLog((prev) => [
+              ...prev,
+              `${b.name} done — median ${e.data.median?.toFixed(0) ?? "?"}ms`,
+            ]);
+            resolve();
+          }
+        };
+        window.addEventListener("message", onMessage);
+
+        // Also set a timeout — if the bench doesn't complete in 30 min, skip
+        const timeout = setTimeout(() => {
+          window.removeEventListener("message", onMessage);
+          setRunLog((prev) => [...prev, `${b.name} timed out`]);
+          resolve();
+        }, 30 * 60_000);
+
+        // Also poll localStorage as fallback (iframe might not postMessage)
+        const startCount = loadResults().filter(
+          (r) => r.ecosystem === b.key
+        ).length;
+        const poll = setInterval(() => {
+          const current = loadResults().filter(
+            (r) => r.ecosystem === b.key
+          ).length;
+          if (current > startCount) {
+            clearInterval(poll);
+            clearTimeout(timeout);
+            window.removeEventListener("message", onMessage);
+            refresh();
+            const latest = loadResults()
+              .filter((r) => r.ecosystem === b.key)
+              .sort((a, c) => c.timestamp - a.timestamp)[0];
+            setRunLog((prev) => [
+              ...prev,
+              `${b.name} done — median ${latest?.median?.toFixed(0) ?? "?"}ms`,
+            ]);
+            resolve();
+          }
+        }, 3000);
+
+        // Create iframe
+        if (iframeRef.current) {
+          iframeRef.current.remove();
+        }
+        const iframe = document.createElement("iframe");
+        iframe.style.cssText =
+          "position:fixed;bottom:0;right:0;width:400px;height:300px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;z-index:100;opacity:0.9;background:#07090c;";
+        iframe.src = `${basePath}${b.href}?autorun=1`;
+        document.body.appendChild(iframe);
+        iframeRef.current = iframe;
+      });
+    }
+
+    // Clean up iframe
+    if (iframeRef.current) {
+      iframeRef.current.remove();
+      iframeRef.current = null;
+    }
+    setRunning(null);
+    setRunLog((prev) => [...prev, "All benchmarks complete."]);
+    refresh();
+  }
+
+  // Latest result per ecosystem
   const latest: Record<string, BenchResult> = {};
   for (const r of results) {
     if (!latest[r.ecosystem] || r.timestamp > latest[r.ecosystem].timestamp) {
@@ -114,6 +182,66 @@ export default function HomePage() {
         </p>
       </header>
 
+      {/* Run All + ecosystem cards */}
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          marginBottom: 16,
+        }}
+      >
+        <button
+          type="button"
+          className="btn btn--accent"
+          style={{ fontSize: 15, padding: "12px 24px" }}
+          disabled={!!running}
+          onClick={runAll}
+        >
+          {running
+            ? `Running ${BENCHMARKS.find((b) => b.key === running)?.name}...`
+            : "Run All Benchmarks"}
+        </button>
+        {Object.keys(latest).length > 0 && (
+          <button
+            type="button"
+            className="btn"
+            style={{ fontSize: 13, padding: "10px 16px" }}
+            onClick={clearResults}
+            disabled={!!running}
+          >
+            Clear results
+          </button>
+        )}
+      </div>
+
+      {/* Run log */}
+      {runLog.length > 0 && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "10px 14px",
+            borderRadius: 10,
+            background: "rgba(8, 11, 14, 0.65)",
+            border: "1px solid rgba(255, 255, 255, 0.06)",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: 12,
+            color: "#9aa0a6",
+            lineHeight: 1.6,
+          }}
+        >
+          {runLog.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+          {running && (
+            <div className="progress" style={{ display: "inline-flex", marginTop: 6 }}>
+              <span className="progress-dot" />
+              Running...
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Benchmark cards */}
       <div style={{ display: "grid", gap: 14, marginBottom: 20 }}>
         {BENCHMARKS.map((b) => (
@@ -129,6 +257,10 @@ export default function HomePage() {
                 cursor: "pointer",
                 transition: "transform 160ms ease, box-shadow 200ms ease",
                 borderLeft: `4px solid ${b.color}`,
+                outline:
+                  running === b.key
+                    ? `2px solid ${b.color}`
+                    : "2px solid transparent",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "translateY(-2px)";
@@ -185,82 +317,23 @@ export default function HomePage() {
       </div>
 
       {/* Comparison table */}
-      <div className="glass" style={{ padding: 20, marginBottom: 20 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 14,
-          }}
-        >
-          <h3 style={{ margin: 0 }}>Comparison</h3>
-          <div style={{ display: "flex", gap: 8 }}>
-            {Object.keys(latest).length > 0 && (
-              <button
-                type="button"
-                className="btn"
-                style={{ fontSize: 12, padding: "6px 12px" }}
-                onClick={clearResults}
-              >
-                Clear results
-              </button>
-            )}
-          </div>
-        </div>
-
-        {Object.keys(latest).length === 0 ? (
-          <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>
-            No results yet. Open each benchmark page and run cycles — results
-            are stored automatically and appear here.
-          </p>
-        ) : (
+      {Object.keys(latest).length > 0 && (
+        <div className="glass" style={{ padding: 20, marginBottom: 20 }}>
+          <h3 style={{ margin: "0 0 14px" }}>Comparison</h3>
           <ComparisonTable results={latest} />
-        )}
-
-        <p
-          style={{
-            color: "#6b7280",
-            fontSize: 11,
-            margin: "12px 0 0",
-            lineHeight: 1.5,
-          }}
-        >
-          Results are stored in localStorage and persist across page reloads.
-          Run each benchmark individually — the latest median from each
-          ecosystem appears here automatically. All times are local proving
-          only (no block inclusion wait).
-        </p>
-      </div>
-
-      {/* How to run */}
-      <div className="glass" style={{ padding: 20 }}>
-        <h3 style={{ margin: "0 0 10px" }}>Headless drivers (CLI)</h3>
-        <pre
-          style={{
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            fontSize: 12,
-            lineHeight: 1.6,
-            color: "#d8dee5",
-            margin: 0,
-            padding: 12,
-            borderRadius: 10,
-            background: "rgba(8, 11, 14, 0.65)",
-            border: "1px solid rgba(255, 255, 255, 0.06)",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {`# Miden (ST / MT, ECDSA / Falcon)
-node drive-bench.mjs st ecdsa 10
-node drive-bench.mjs mt ecdsa 10
-
-# Aleo (ST / MT, credits.aleo transfer_public)
-node drive-bench-aleo.mjs st 10
-node drive-bench-aleo.mjs mt 10
-
-# Aztec (full PXE, run from browser /aztec/ route)`}
-        </pre>
-      </div>
+          <p
+            style={{
+              color: "#6b7280",
+              fontSize: 11,
+              margin: "12px 0 0",
+              lineHeight: 1.5,
+            }}
+          >
+            All times are local proving only (no block inclusion wait). Results
+            persist in localStorage across page reloads.
+          </p>
+        </div>
+      )}
     </main>
   );
 }
@@ -273,7 +346,6 @@ function ComparisonTable({
   const ecosystems = BENCHMARKS.map((b) => b.key).filter((k) => results[k]);
   if (ecosystems.length === 0) return null;
 
-  // Find fastest for highlighting
   const medians = ecosystems.map((k) => results[k].median);
   const fastest = Math.min(...medians);
 
@@ -297,19 +369,13 @@ function ComparisonTable({
               letterSpacing: "0.08em",
             }}
           >
-            <th style={{ textAlign: "left", padding: "8px 12px" }}>
-              Ecosystem
-            </th>
-            <th style={{ textAlign: "right", padding: "8px 12px" }}>
-              Median
-            </th>
+            <th style={{ textAlign: "left", padding: "8px 12px" }}>Ecosystem</th>
+            <th style={{ textAlign: "right", padding: "8px 12px" }}>Median</th>
             <th style={{ textAlign: "right", padding: "8px 12px" }}>p25</th>
             <th style={{ textAlign: "right", padding: "8px 12px" }}>p75</th>
             <th style={{ textAlign: "right", padding: "8px 12px" }}>IQR</th>
             <th style={{ textAlign: "right", padding: "8px 12px" }}>n</th>
-            <th style={{ textAlign: "left", padding: "8px 12px" }}>
-              Variant
-            </th>
+            <th style={{ textAlign: "left", padding: "8px 12px" }}>Variant</th>
           </tr>
         </thead>
         <tbody>
@@ -325,82 +391,22 @@ function ComparisonTable({
                   color: isFastest ? "#7ee0a3" : "#e6e6e6",
                 }}
               >
-                <td
-                  style={{
-                    padding: "10px 12px",
-                    fontWeight: 600,
-                    color: b.color,
-                  }}
-                >
+                <td style={{ padding: "10px 12px", fontWeight: 600, color: b.color }}>
                   {b.name}
                   {isFastest && (
-                    <span
-                      style={{
-                        marginLeft: 8,
-                        fontSize: 10,
-                        color: "#7ee0a3",
-                        fontWeight: 400,
-                      }}
-                    >
+                    <span style={{ marginLeft: 8, fontSize: 10, color: "#7ee0a3", fontWeight: 400 }}>
                       fastest
                     </span>
                   )}
                 </td>
-                <td
-                  style={{
-                    textAlign: "right",
-                    padding: "10px 12px",
-                    fontWeight: 700,
-                    fontSize: 15,
-                  }}
-                >
+                <td style={{ textAlign: "right", padding: "10px 12px", fontWeight: 700, fontSize: 15 }}>
                   {r.median.toFixed(0)} ms
                 </td>
-                <td
-                  style={{
-                    textAlign: "right",
-                    padding: "10px 12px",
-                    color: "#9aa0a6",
-                  }}
-                >
-                  {r.p25.toFixed(0)}
-                </td>
-                <td
-                  style={{
-                    textAlign: "right",
-                    padding: "10px 12px",
-                    color: "#9aa0a6",
-                  }}
-                >
-                  {r.p75.toFixed(0)}
-                </td>
-                <td
-                  style={{
-                    textAlign: "right",
-                    padding: "10px 12px",
-                    color: "#9aa0a6",
-                  }}
-                >
-                  {r.iqr.toFixed(0)}
-                </td>
-                <td
-                  style={{
-                    textAlign: "right",
-                    padding: "10px 12px",
-                    color: "#9aa0a6",
-                  }}
-                >
-                  {r.n}
-                </td>
-                <td
-                  style={{
-                    padding: "10px 12px",
-                    color: "#9aa0a6",
-                    fontSize: 12,
-                  }}
-                >
-                  {r.variant}
-                </td>
+                <td style={{ textAlign: "right", padding: "10px 12px", color: "#9aa0a6" }}>{r.p25.toFixed(0)}</td>
+                <td style={{ textAlign: "right", padding: "10px 12px", color: "#9aa0a6" }}>{r.p75.toFixed(0)}</td>
+                <td style={{ textAlign: "right", padding: "10px 12px", color: "#9aa0a6" }}>{r.iqr.toFixed(0)}</td>
+                <td style={{ textAlign: "right", padding: "10px 12px", color: "#9aa0a6" }}>{r.n}</td>
+                <td style={{ padding: "10px 12px", color: "#9aa0a6", fontSize: 12 }}>{r.variant}</td>
               </tr>
             );
           })}

@@ -7,7 +7,7 @@ export default function AboutPage() {
     <main style={{ maxWidth: 800, margin: "0 auto" }}>
       <header style={{ marginBottom: 24 }}>
         <Link
-          href="/"
+          href={(process.env.NEXT_PUBLIC_BASE_PATH || "") + "/"}
           style={{ color: "#6b7280", fontSize: 13, textDecoration: "none" }}
         >
           &larr; Back to dashboard

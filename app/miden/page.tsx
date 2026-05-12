@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { installOuterProveTiming, type SdkVariant } from "../lib/timing";
-import { saveBenchResult } from "../lib/results";
+import { saveBenchResult, isAutorun } from "../lib/results";
 
 // Both subpaths re-export the same surface from a shared crate; we just pick
 // the type alias from one of them. Runtime imports below are variant-aware.
@@ -58,7 +58,7 @@ export default function Page() {
 
   return (
     <main style={{ maxWidth: 1040, margin: "0 auto" }}>
-      <a href="/" style={{ color: "#6b7280", fontSize: 13, textDecoration: "none" }}>&larr; Dashboard</a>
+      <a href={(process.env.NEXT_PUBLIC_BASE_PATH || "") + "/"} style={{ color: "#6b7280", fontSize: 13, textDecoration: "none" }}>&larr; Dashboard</a>
       <header style={{ marginBottom: 18 }}>
         <h1>Miden Proving Bench</h1>
         <p style={{ color: "#9aa0a6", margin: 0, fontSize: 14 }}>
@@ -558,6 +558,21 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
     if (!(await runConsume())) return;
     await runSend();
   }
+
+  // Autorun: if ?autorun=1, run all + cycles automatically
+  const autoranRef = useRef(false);
+  useEffect(() => {
+    if (autoranRef.current || !isAutorun()) return;
+    autoranRef.current = true;
+    (async () => {
+      if (!(await init())) return;
+      if (!(await runMint())) return;
+      if (!(await runConsume())) return;
+      if (!(await runSend())) return;
+      await runCycles(NUM_CYCLES_DEFAULT);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const busy = phase !== "idle" && phase !== "done";
   const cycleReady = !!(clientRef.current && walletRef.current && recipientRef.current && faucetRef.current);
