@@ -125,6 +125,43 @@ export default function AboutPage() {
           </p>
         </Section>
 
+        <Section title="Block times and total user wait">
+          <p>
+            After proving, the transaction must be included in a block before
+            it takes effect. Block time varies dramatically across ecosystems
+            and directly impacts UX:
+          </p>
+          <Table
+            headers={["", "Block time", "Must wait between sends?", "Why?"]}
+            rows={[
+              [
+                "Miden",
+                "~3s",
+                "Yes (via client.sync)",
+                "Fast enough to be imperceptible. The SDK syncs state before each send, which includes waiting for the previous tx to be included.",
+              ],
+              [
+                "Aleo",
+                "~15s",
+                "No (public transfers)",
+                "Public balance transfers (transfer_public) update a mapping, not UTXO notes. Sequential sends from the same account don't conflict. However, our benchmark doesn't submit the tx, so block wait isn't measured.",
+              ],
+              [
+                "Aztec",
+                "~72s",
+                "Yes (mandatory)",
+                "Private transfers nullify notes (UTXO model). The next transfer needs to see the new change note from the previous block. Without waiting, the PXE tries to spend an already-nullified note → conflict.",
+              ],
+            ]}
+          />
+          <p>
+            <strong>Total user wait = prove time + block time.</strong> For
+            Miden this is ~9s. For Aleo ~27s (if submitted). For Aztec ~87s.
+            The block time is a chain infrastructure parameter, not a prover
+            limitation — but it&apos;s what the user experiences.
+          </p>
+        </Section>
+
         <Section title="Caveats and fairness">
           <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
             <li>

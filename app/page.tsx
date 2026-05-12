@@ -323,17 +323,33 @@ export default function HomePage() {
         <div className="glass" style={{ padding: 20, marginBottom: 20 }}>
           <h3 style={{ margin: "0 0 14px" }}>Comparison</h3>
           <ComparisonTable results={latest} />
-          <p
-            style={{
-              color: "#6b7280",
-              fontSize: 11,
-              margin: "12px 0 0",
-              lineHeight: 1.5,
-            }}
-          >
-            All times are local proving only (no block inclusion wait). Results
-            persist in localStorage across page reloads.
-          </p>
+          <div style={{ color: "#6b7280", fontSize: 11, margin: "12px 0 0", lineHeight: 1.7 }}>
+            <p style={{ margin: "0 0 6px" }}>
+              <strong style={{ color: "#9aa0a6" }}>Prove</strong> = local
+              ZK proof generation in the browser (WASM).{" "}
+              <strong style={{ color: "#9aa0a6" }}>Block wait</strong> = time
+              for the transaction to be included in a block.{" "}
+              <strong style={{ color: "#9aa0a6" }}>Total</strong> = what the
+              user actually waits.
+            </p>
+            <p style={{ margin: "0 0 6px" }}>
+              <strong style={{ color: "#1f8a4c" }}>Miden</strong>: block time
+              ~3s. Block wait includes <code>client.sync()</code> which waits
+              for the previous tx to land before the next send.
+            </p>
+            <p style={{ margin: "0 0 6px" }}>
+              <strong style={{ color: "#4a6ee0" }}>Aleo</strong>: block time
+              ~15s. Our benchmark builds + proves the transaction but does not
+              submit it, so block wait shows &ldquo;—&rdquo;. A real user would
+              wait an additional ~15s for block inclusion.
+            </p>
+            <p style={{ margin: 0 }}>
+              <strong style={{ color: "#a855f7" }}>Aztec</strong>: block time
+              ~72s. Each private transfer nullifies a note — the next transfer
+              needs the new note from the previous block, so we must wait for
+              inclusion between cycles. This is inherent to Aztec&apos;s UTXO model.
+            </p>
+          </div>
         </div>
       )}
     </main>
