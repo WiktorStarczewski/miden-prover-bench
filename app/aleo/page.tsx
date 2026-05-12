@@ -133,7 +133,9 @@ function createWorkerRpc(onLog: (text: string) => void) {
   // Use the standalone worker in public/ — it loads the pre-built
   // @provablehq/wasm directly, avoiding webpack WASM bundling issues.
   // Module type is required for dynamic import() of the WASM ES module.
-  const worker = new Worker("/aleo-sdk/bench-worker.js", {
+  // Respect basePath for GitHub Pages deployment.
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+  const worker = new Worker(`${basePath}/aleo-sdk/bench-worker.js`, {
     type: "module",
   });
 
