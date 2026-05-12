@@ -22,7 +22,7 @@ const nextConfig = {
   // `<base>/index.html` for that path; without trailing slash some link
   // resolutions get confused).
   trailingSlash: true,
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.module.rules.push({
       test: /\.wasm$/,
       type: "asset/resource",
@@ -30,6 +30,30 @@ const nextConfig = {
     // The SDK's eager entry does `await getWasmOrThrow()` at module top
     // level. Webpack accepts that only with topLevelAwait experiment on.
     config.experiments = { ...(config.experiments || {}), topLevelAwait: true };
+
+    // Aztec SDK needs Node polyfills in the browser.
+    if (!isServer) {
+      config.resolve = config.resolve || {};
+      config.resolve.fallback = {
+        ...(config.resolve.fallback || {}),
+        buffer: require.resolve("buffer/"),
+        crypto: false,
+        fs: false,
+        net: false,
+        tty: false,
+        path: false,
+        os: false,
+        stream: false,
+        zlib: false,
+        http: false,
+        https: false,
+        child_process: false,
+        worker_threads: false,
+      };
+      // Exclude heavy WASM packages from pre-bundling
+      config.externals = config.externals || [];
+    }
+
     return config;
   },
   // wasm-bindgen-rayon spawns rayon worker threads as Web Workers backed by

@@ -1,6 +1,6 @@
 import "./globals.css";
 
-export const metadata = { title: "Miden Proving Bench" };
+export const metadata = { title: "ZK Proving Bench" };
 
 // Statically inlined at build time. Empty for local dev (yarn dev), set to
 // "/miden-prover-bench" by the GitHub Pages CI workflow so asset URLs and the
