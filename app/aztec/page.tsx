@@ -21,7 +21,8 @@ type PhaseStats = {
   iqr: number; total: number; samples: number[];
 };
 
-const NUM_CYCLES_DEFAULT = 10;
+// Fewer cycles than Miden/Aleo because each cycle includes ~72s block wait
+const NUM_CYCLES_DEFAULT = 3;
 const COOLDOWN_MS = 1500;
 const TESTNET_RPC = "https://rpc.testnet.aztec-labs.com";
 
@@ -295,16 +296,19 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
       const variant = `aztec-${threadMode}`;
       log(`info variant=${variant} private transfer (Alice -> Bob, 10 tokens)`);
 
+      // Send and wait for inclusion (required — Aztec's UTXO model needs
+      // each tx to be mined before the next can spend updated notes).
+      // We time the full send including block wait. The prove portion is
+      // ~15s; the rest is block inclusion (~72s on testnet).
       const t0 = performance.now();
-      await (tokenRef.current.methods
+      await tokenRef.current.methods
         .transfer(bobRef.current, 10n)
-        .send as any)({
+        .send({
           from: aliceRef.current,
           fee: { paymentMethod: feePaymentRef.current },
-          wait: "NO_WAIT",
         });
       const ms = performance.now() - t0;
-      log(`outer variant=${variant} prover=local duration_ms=${ms.toFixed(1)}`);
+      log(`outer variant=${variant} prover=local duration_ms=${ms.toFixed(1)} (includes ~72s block wait)`);
       setPhase("done");
       return true;
     } catch (e) {
@@ -335,21 +339,16 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
         log(`info variant=${variant} cycle ${i}/${numCycles} private transfer`);
 
         const t0 = performance.now();
-        await (tokenRef.current.methods
+        await tokenRef.current.methods
           .transfer(bobRef.current, 1n)
-          .send as any)({
+          .send({
             from: aliceRef.current,
             fee: { paymentMethod: feePaymentRef.current },
-            wait: "NO_WAIT",
           });
         const ms = performance.now() - t0;
-        log(`outer variant=${variant} prover=local duration_ms=${ms.toFixed(1)}`);
+        log(`outer variant=${variant} prover=local duration_ms=${ms.toFixed(1)} (includes block wait)`);
         cycleSamplesRef.current.push({ cycle: i, durationMs: ms });
-
-        if (i < numCycles && COOLDOWN_MS > 0) {
-          log(`info variant=${variant} cycle ${i} cooldown ${COOLDOWN_MS}ms`);
-          await new Promise((r) => setTimeout(r, COOLDOWN_MS));
-        }
+        // No cooldown needed — block wait already provides cooling
       }
 
       const summary = summarize(cycleSamplesRef.current, numCycles);
@@ -445,8 +444,9 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
 
       <h3 style={{ marginBottom: 4 }}>[proving-timing] log</h3>
       <p style={{ color: "#9aa0a6", marginTop: 0, fontSize: 12 }}>
-        <code>outer</code> wraps simulate + prove + submit (NO_WAIT). Setup
-        operations (deploy, mint) are excluded from timing.
+        <code>outer</code> wraps simulate + prove + submit + block inclusion
+        (~72s on testnet). Subtract ~72s to estimate pure proving time.
+        Setup (deploy, mint) is excluded — done once and persisted.
       </p>
       <pre ref={logRef} className="log">
         {logs.length === 0 ? <span style={{ color: "#666" }}>(no events yet)</span> : null}
