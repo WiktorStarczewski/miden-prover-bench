@@ -333,36 +333,161 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* Comparison table */}
+      {/* Animation + Comparison table */}
       {Object.keys(latest).length > 0 && (
         <div className="glass" style={{ padding: 20, marginBottom: 20 }}>
-          <h3 style={{ margin: "0 0 4px" }}>Alice sends 10 tokens</h3>
-          <p style={{ color: "#6b7280", fontSize: 12, margin: "0 0 12px" }}>
-            Time from Alice clicking &quot;Send&quot; until the transfer is on-chain.
+          <h3 style={{ margin: "0 0 4px" }}>
+            Alice sends 10 tokens to Bob
+          </h3>
+          <p style={{ color: "#6b7280", fontSize: 12, margin: "0 0 16px" }}>
+            Total time until Bob can spend the tokens. For Miden, Bob must
+            consume the note (extra prove + block). For Aleo &amp; Aztec,
+            Bob owns the tokens once Alice&apos;s tx lands.
           </p>
-          <ComparisonTable results={latest} view="send" />
 
-          <h3 style={{ margin: "20px 0 4px" }}>Bob can spend the tokens</h3>
-          <p style={{ color: "#6b7280", fontSize: 12, margin: "0 0 12px" }}>
-            Total time until Bob has spendable tokens. In Miden, Bob must
-            consume the note (separate prove + block). In Aleo and Aztec, Bob
-            owns the tokens as soon as Alice&apos;s transaction lands.
-          </p>
-          <ComparisonTable results={latest} view="bob-spendable" />
+          <NoteAnimation results={latest} />
+          <ComparisonTable results={latest} />
 
           <div style={{ color: "#6b7280", fontSize: 11, margin: "12px 0 0", lineHeight: 1.7 }}>
             <p style={{ margin: "0 0 4px" }}>
-              <strong style={{ color: "#9aa0a6" }}>Prove</strong> = local ZK
-              proof generation in the browser (measured).{" "}
-              <strong style={{ color: "#9aa0a6" }}>Block time</strong> = testnet
-              block interval (Miden ~3s, Aleo ~15s, Aztec ~72s).{" "}
+              <strong style={{ color: "#9aa0a6" }}>Send prove</strong> = Alice&apos;s
+              local ZK proof (measured).{" "}
+              <strong style={{ color: "#9aa0a6" }}>Block</strong> = testnet
+              block time (Miden ~3s, Aleo ~15s, Aztec ~72s).{" "}
               <strong style={{ color: "#9aa0a6" }}>Consume</strong> = Bob
-              consuming Alice&apos;s note — Miden only (Aleo/Aztec: not needed).
+              proves consumption of the note (Miden only).
             </p>
           </div>
         </div>
       )}
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stick figure animation: note flies from Alice to Bob
+// ---------------------------------------------------------------------------
+
+function NoteAnimation({
+  results,
+}: {
+  results: Record<string, BenchResult>;
+}) {
+  const ecosystems = BENCHMARKS.map((b) => b.key).filter((k) => results[k]);
+  if (ecosystems.length === 0) return null;
+
+  const getBlockMs = (key: string) => (BLOCK_TIME_S[key] ?? 0) * 1000;
+  const getTotal = (key: string) => {
+    const r = results[key];
+    const t = r.median + getBlockMs(key);
+    return r.consumeMedian ? t + r.consumeMedian + getBlockMs(key) : t;
+  };
+
+  const maxTotal = Math.max(...ecosystems.map(getTotal));
+  // Animation runs over 8 seconds scaled to the slowest
+  const ANIM_DURATION = 8;
+
+  return (
+    <div style={{ margin: "0 0 20px", overflow: "hidden" }}>
+      {ecosystems.map((key) => {
+        const b = BENCHMARKS.find((x) => x.key === key)!;
+        const total = getTotal(key);
+        const duration = (total / maxTotal) * ANIM_DURATION;
+        return (
+          <div
+            key={key}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 0,
+              marginBottom: 10,
+              height: 48,
+            }}
+          >
+            {/* Alice */}
+            <div style={{ width: 50, textAlign: "center", flexShrink: 0 }}>
+              <StickFigure color={b.color} />
+              <div style={{ fontSize: 9, color: "#6b7280", marginTop: -2 }}>Alice</div>
+            </div>
+
+            {/* Track */}
+            <div
+              style={{
+                flex: 1,
+                position: "relative",
+                height: 24,
+                borderBottom: `1px dashed ${b.color}33`,
+              }}
+            >
+              {/* Flying note */}
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: -1,
+                  left: 0,
+                  animation: `fly-note ${duration}s ease-in-out infinite`,
+                  fontSize: 16,
+                }}
+              >
+                <span style={{ filter: `drop-shadow(0 0 4px ${b.color})` }}>
+                  &#9993;
+                </span>
+              </div>
+              {/* Ecosystem label + time */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  fontSize: 11,
+                  color: b.color,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {b.name}{" "}
+                <span style={{ color: "#9aa0a6", fontWeight: 400 }}>
+                  {(total / 1000).toFixed(1)}s
+                </span>
+              </div>
+            </div>
+
+            {/* Bob */}
+            <div style={{ width: 50, textAlign: "center", flexShrink: 0 }}>
+              <StickFigure color={b.color} />
+              <div style={{ fontSize: 9, color: "#6b7280", marginTop: -2 }}>Bob</div>
+            </div>
+          </div>
+        );
+      })}
+
+      <style>{`
+        @keyframes fly-note {
+          0% { left: 0%; opacity: 0; }
+          5% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { left: calc(100% - 20px); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function StickFigure({ color }: { color: string }) {
+  return (
+    <svg width="24" height="32" viewBox="0 0 24 32" style={{ display: "block", margin: "0 auto" }}>
+      {/* Head */}
+      <circle cx="12" cy="6" r="4" fill="none" stroke={color} strokeWidth="1.5" />
+      {/* Body */}
+      <line x1="12" y1="10" x2="12" y2="22" stroke={color} strokeWidth="1.5" />
+      {/* Arms */}
+      <line x1="4" y1="15" x2="20" y2="15" stroke={color} strokeWidth="1.5" />
+      {/* Left leg */}
+      <line x1="12" y1="22" x2="5" y2="30" stroke={color} strokeWidth="1.5" />
+      {/* Right leg */}
+      <line x1="12" y1="22" x2="19" y2="30" stroke={color} strokeWidth="1.5" />
+    </svg>
   );
 }
 
@@ -373,22 +498,19 @@ function fmt(ms: number): string {
 
 function ComparisonTable({
   results,
-  view,
 }: {
   results: Record<string, BenchResult>;
-  view: "send" | "bob-spendable";
 }) {
   const ecosystems = BENCHMARKS.map((b) => b.key).filter((k) => results[k]);
   if (ecosystems.length === 0) return null;
 
   const getBlockMs = (key: string) => (BLOCK_TIME_S[key] ?? 0) * 1000;
 
-  // "send" view: prove + 1 block
-  // "bob-spendable" view: prove + 1 block + (consume prove + 1 block if Miden)
+  // Total = send prove + block + (consume prove + block if Miden)
   const getTotal = (key: string) => {
     const r = results[key];
     const sendTotal = r.median + getBlockMs(key);
-    if (view === "bob-spendable" && r.consumeMedian) {
+    if (r.consumeMedian) {
       return sendTotal + r.consumeMedian + getBlockMs(key);
     }
     return sendTotal;
@@ -421,8 +543,8 @@ function ComparisonTable({
             <th style={{ ...thStyle, textAlign: "left" }}>Ecosystem</th>
             <th style={thStyle}>Send prove</th>
             <th style={thStyle}>Block</th>
-            {view === "bob-spendable" && <th style={thStyle}>Consume prove</th>}
-            {view === "bob-spendable" && <th style={thStyle}>Block</th>}
+            <th style={thStyle}>Consume prove</th>
+            <th style={thStyle}>Block</th>
             <th style={thStyle}>Total</th>
             <th style={thStyle}>n</th>
           </tr>
@@ -457,22 +579,18 @@ function ComparisonTable({
                 <td style={{ textAlign: "right", padding: "10px 10px", color: "#f0a060" }}>
                   ~{fmt(blockMs)}
                 </td>
-                {view === "bob-spendable" && (
-                  <td style={{
-                    textAlign: "right", padding: "10px 10px",
-                    color: consumeMs > 0 ? "#e6e6e6" : "#4a5568",
-                  }}>
-                    {consumeMs > 0 ? fmt(consumeMs) : "—"}
-                  </td>
-                )}
-                {view === "bob-spendable" && (
-                  <td style={{
-                    textAlign: "right", padding: "10px 10px",
-                    color: consumeMs > 0 ? "#f0a060" : "#4a5568",
-                  }}>
-                    {consumeMs > 0 ? `~${fmt(blockMs)}` : "—"}
-                  </td>
-                )}
+                <td style={{
+                  textAlign: "right", padding: "10px 10px",
+                  color: consumeMs > 0 ? "#e6e6e6" : "#4a5568",
+                }}>
+                  {consumeMs > 0 ? fmt(consumeMs) : "—"}
+                </td>
+                <td style={{
+                  textAlign: "right", padding: "10px 10px",
+                  color: consumeMs > 0 ? "#f0a060" : "#4a5568",
+                }}>
+                  {consumeMs > 0 ? `~${fmt(blockMs)}` : "—"}
+                </td>
                 <td style={{
                   textAlign: "right", padding: "10px 10px",
                   fontWeight: 600, fontSize: 14,
