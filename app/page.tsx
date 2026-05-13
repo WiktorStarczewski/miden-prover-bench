@@ -5,11 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
-// Known testnet block times (seconds). Used to compute total user wait.
-const BLOCK_TIME_S: Record<string, number> = {
-  miden: 3,
-  aleo: 15,
-  aztec: 72,
+// Average block times (seconds) = block_interval / 2.
+// Used as fallback when measured block wait is not available.
+const AVG_BLOCK_TIME_S: Record<string, number> = {
+  miden: 1.5,   // ~3s block interval / 2
+  aleo: 7.5,    // ~15s block interval / 2
+  aztec: 36,    // ~72s block interval / 2
 };
 
 const BENCHMARKS = [
@@ -352,8 +353,9 @@ export default function HomePage() {
             <p style={{ margin: "0 0 4px" }}>
               <strong style={{ color: "#9aa0a6" }}>Send prove</strong> = Alice&apos;s
               local ZK proof (measured).{" "}
-              <strong style={{ color: "#9aa0a6" }}>Block</strong> = testnet
-              block time (Miden ~3s, Aleo ~15s, Aztec ~72s).{" "}
+              <strong style={{ color: "#9aa0a6" }}>Block</strong> = measured
+              block wait when available, otherwise avg block interval / 2
+              (Miden ~1.5s, Aleo ~7.5s, Aztec ~36s).{" "}
               <strong style={{ color: "#9aa0a6" }}>Consume</strong> = Bob
               proves consumption of the note (Miden only).
             </p>
@@ -424,7 +426,10 @@ function NoteAnimation({
         const completed = completedCounts[key] || 0;
         const r = results[key];
         // Total flight = prove + block + (consume + block if Miden)
-        const blockMs = (BLOCK_TIME_S[key] ?? 0) * 1000;
+        // Use measured blockWaitMs if available, otherwise avg block_interval/2
+        const blockMs = (r?.blockWaitMs && r.blockWaitMs > 0)
+          ? r.blockWaitMs
+          : (AVG_BLOCK_TIME_S[key] ?? 0) * 1000;
         const proveMs = r?.median || 10000;
         const consumeMs = r?.consumeMedian || 0;
         const totalFlightMs = proveMs + blockMs + (consumeMs > 0 ? consumeMs + blockMs : 0);
@@ -554,14 +559,20 @@ function ComparisonTable({
   const ecosystems = BENCHMARKS.map((b) => b.key).filter((k) => results[k]);
   if (ecosystems.length === 0) return null;
 
-  const getBlockMs = (key: string) => (BLOCK_TIME_S[key] ?? 0) * 1000;
+  // Use measured block wait if available, otherwise avg block_interval/2
+  const getBlockMs = (key: string) => {
+    const r = results[key];
+    if (r?.blockWaitMs && r.blockWaitMs > 0) return r.blockWaitMs;
+    return (AVG_BLOCK_TIME_S[key] ?? 0) * 1000;
+  };
 
   // Total = send prove + block + (consume prove + block if Miden)
   const getTotal = (key: string) => {
     const r = results[key];
-    const sendTotal = r.median + getBlockMs(key);
+    const blockMs = getBlockMs(key);
+    const sendTotal = r.median + blockMs;
     if (r.consumeMedian) {
-      return sendTotal + r.consumeMedian + getBlockMs(key);
+      return sendTotal + r.consumeMedian + blockMs;
     }
     return sendTotal;
   };
