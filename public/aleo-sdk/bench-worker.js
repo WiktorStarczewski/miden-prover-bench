@@ -103,35 +103,82 @@ async function handleTransferOnChain(recipient, amountCredits, priorityFee) {
   if (!cachedProvingKey) throw new Error("Keys not fetched");
   const wasm = mod;
 
-  // Quick latency check on the API
-  const tPing = performance.now();
-  try {
-    await fetch(TESTNET_API + "/testnet/block/height/latest");
-    log(`worker: API latency: ${(performance.now() - tPing).toFixed(0)}ms`);
-  } catch (e) { log(`worker: API ping failed: ${e}`); }
-
+  // --- Phase 1: Build + prove (timed as proveMs) ---
   log(`worker: buildTransferTransaction (transfer_public, ${amountCredits} credits -> ${recipient.slice(0, 16)}...)`);
   const t0 = performance.now();
   const tx = await wasm.ProgramManager.buildTransferTransaction(
     aliceKey,
     amountCredits,
     recipient,
-    "public",          // transfer_type
-    null,              // amount_record (not needed for public)
-    priorityFee,       // priority_fee_credits
-    null,              // fee_record (not needed for public fee)
-    TESTNET_API,       // url — fetches state inclusion proofs from chain
+    "public",
+    null,
+    priorityFee,
+    null,
+    TESTNET_API,
     cachedProvingKey,
     cachedVerifyingKey,
     feeProvingKey,
     feeVerifyingKey
   );
-  const ms = performance.now() - t0;
+  const proveMs = performance.now() - t0;
 
   let txId = "unknown";
   try { txId = tx.transactionId?.() || tx.id?.() || tx.toString().slice(0, 32); } catch {}
-  log(`worker: transfer proved in ${ms.toFixed(0)}ms, txId=${txId}`);
-  post({ type: "transferOnChain", ok: true, durationMs: ms, txId });
+  log(`worker: proved in ${proveMs.toFixed(0)}ms, txId=${txId}`);
+
+  // --- Phase 2: Submit transaction ---
+  log(`worker: submitting tx to ${TESTNET_API}...`);
+  const tSubmit = performance.now();
+  try {
+    const txStr = tx.toString();
+    const resp = await fetch(TESTNET_API + "/testnet/transaction/broadcast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(txStr),
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      log(`worker: broadcast failed (${resp.status}): ${errText.slice(0, 200)}`);
+    } else {
+      log(`worker: broadcast ok in ${(performance.now() - tSubmit).toFixed(0)}ms`);
+    }
+  } catch (e) {
+    log(`worker: broadcast error: ${e}`);
+  }
+
+  // --- Phase 3: Wait for on-chain confirmation ---
+  log(`worker: waiting for on-chain confirmation...`);
+  const tWait = performance.now();
+  let blockWaitMs = 0;
+  try {
+    const pollUrl = TESTNET_API + "/testnet/transaction/" + txId;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await new Promise(r => setTimeout(r, 5000));
+      try {
+        const resp = await fetch(pollUrl);
+        if (resp.ok) {
+          blockWaitMs = performance.now() - tWait;
+          log(`worker: confirmed on-chain in ${(blockWaitMs / 1000).toFixed(1)}s`);
+          break;
+        }
+      } catch { /* keep polling */ }
+    }
+    if (blockWaitMs === 0) {
+      blockWaitMs = performance.now() - tWait;
+      log(`worker: confirmation timed out after ${(blockWaitMs / 1000).toFixed(0)}s`);
+    }
+  } catch (e) {
+    blockWaitMs = performance.now() - tWait;
+    log(`worker: confirmation poll error: ${e}`);
+  }
+
+  post({
+    type: "transferOnChain",
+    ok: true,
+    durationMs: proveMs,
+    blockWaitMs,
+    txId,
+  });
 }
 
 async function handleRun(program, fn, inputs) {

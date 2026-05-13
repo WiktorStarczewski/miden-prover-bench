@@ -16,7 +16,7 @@ type WorkerRequest =
 type WorkerResponse =
   | { type: "init"; ok: true; alice: string; bob: string }
   | { type: "fetchCreditsKeys"; ok: true; durationMs: number }
-  | { type: "transferOnChain"; ok: true; durationMs: number; txId: string }
+  | { type: "transferOnChain"; ok: true; durationMs: number; blockWaitMs: number; txId: string }
   | { type: "run"; ok: true; durationMs: number; outputs: string[] }
   | { type: "error"; source: string; message: string }
   | { type: "log"; text: string };
@@ -205,6 +205,7 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
   const rpcRef = useRef<ReturnType<typeof createWorkerRpc> | null>(null);
   const logRef = useRef<HTMLPreElement>(null);
   const cycleSamplesRef = useRef<CycleSample[]>([]);
+  const blockWaitTimesRef = useRef<number[]>([]);
   const accountsRef = useRef<{ alice: string; bob: string } | null>(null);
 
   // Auto-scroll log
@@ -376,6 +377,7 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
     setPhase("cycles");
     setSummary(null);
     cycleSamplesRef.current = [];
+    blockWaitTimesRef.current = [];
 
     try {
       const variant = `aleo-${threadMode}`;
@@ -410,6 +412,11 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
           `outer variant=${variant} prover=local duration_ms=${res.durationMs.toFixed(1)}`
         );
         cycleSamplesRef.current.push({ cycle: i, durationMs: res.durationMs });
+        // Track block wait from on-chain response
+        if (res.type === "transferOnChain" && res.blockWaitMs > 0) {
+          blockWaitTimesRef.current.push(res.blockWaitMs);
+          log(`info variant=${variant} cycle ${i} block wait ${(res.blockWaitMs / 1000).toFixed(1)}s`);
+        }
 
         if (i < numCycles && COOLDOWN_MS > 0) {
           log(`info variant=${variant} cycle ${i} cooldown ${COOLDOWN_MS}ms`);
@@ -422,6 +429,11 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
       log(
         `info variant=${variant} cycles complete — ${formatSummaryLine(summary)}`
       );
+      // Compute block wait median
+      const bwSorted = [...blockWaitTimesRef.current].sort((a, b) => a - b);
+      const blockWaitMedian = bwSorted.length > 0
+        ? bwSorted[Math.floor(bwSorted.length / 2)]
+        : 0;
       saveBenchResult({
         ecosystem: "aleo",
         variant,
@@ -431,8 +443,8 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
         iqr: summary.transfer.iqr,
         n: summary.transfer.count,
         samples: summary.transfer.samples,
-        blockWaitMs: 0, // tx not submitted, no block wait
-        totalMs: summary.transfer.median, // prove = total
+        blockWaitMs: blockWaitMedian,
+        totalMs: summary.transfer.median + blockWaitMedian,
         timestamp: Date.now(),
       });
       setPhase("done");
