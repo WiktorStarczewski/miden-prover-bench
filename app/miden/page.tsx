@@ -559,6 +559,7 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
         iqr: summary.send.iqr,
         n: summary.send.count,
         samples: summary.send.samples,
+        consumeMedian: summary.consume.median,
         blockWaitMs: Math.max(0, totalMedian - summary.send.median),
         totalMs: totalMedian,
         timestamp: Date.now(),

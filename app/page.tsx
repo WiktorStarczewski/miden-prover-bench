@@ -45,14 +45,15 @@ const BENCHMARKS = [
 type BenchResult = {
   ecosystem: string;
   variant: string;
-  median: number;       // prove-only median (ms)
+  median: number;          // send prove-only median (ms)
   p25: number;
   p75: number;
   iqr: number;
   n: number;
   samples: number[];
-  blockWaitMs?: number; // median block inclusion wait (ms)
-  totalMs?: number;     // prove + block wait (ms)
+  consumeMedian?: number;  // consume prove median (ms) — Miden only
+  blockWaitMs?: number;    // median block inclusion wait (ms)
+  totalMs?: number;        // prove + block wait (ms)
   timestamp: number;
 };
 
@@ -335,23 +336,28 @@ export default function HomePage() {
       {/* Comparison table */}
       {Object.keys(latest).length > 0 && (
         <div className="glass" style={{ padding: 20, marginBottom: 20 }}>
-          <h3 style={{ margin: "0 0 14px" }}>Comparison</h3>
-          <ComparisonTable results={latest} />
+          <h3 style={{ margin: "0 0 4px" }}>Alice sends 10 tokens</h3>
+          <p style={{ color: "#6b7280", fontSize: 12, margin: "0 0 12px" }}>
+            Time from Alice clicking &quot;Send&quot; until the transfer is on-chain.
+          </p>
+          <ComparisonTable results={latest} view="send" />
+
+          <h3 style={{ margin: "20px 0 4px" }}>Bob can spend the tokens</h3>
+          <p style={{ color: "#6b7280", fontSize: 12, margin: "0 0 12px" }}>
+            Total time until Bob has spendable tokens. In Miden, Bob must
+            consume the note (separate prove + block). In Aleo and Aztec, Bob
+            owns the tokens as soon as Alice&apos;s transaction lands.
+          </p>
+          <ComparisonTable results={latest} view="bob-spendable" />
+
           <div style={{ color: "#6b7280", fontSize: 11, margin: "12px 0 0", lineHeight: 1.7 }}>
-            <p style={{ margin: "0 0 6px" }}>
+            <p style={{ margin: "0 0 4px" }}>
               <strong style={{ color: "#9aa0a6" }}>Prove</strong> = local ZK
               proof generation in the browser (measured).{" "}
               <strong style={{ color: "#9aa0a6" }}>Block time</strong> = testnet
-              block interval (known constant).{" "}
-              <strong style={{ color: "#9aa0a6" }}>Total</strong> = prove +
-              block time = what a user waits from clicking &quot;Send&quot;
-              until the transfer is on-chain.
-            </p>
-            <p style={{ margin: 0 }}>
-              Block times: Miden ~3s, Aleo ~15s, Aztec ~72s. These are current
-              testnet values and may change. The prove time is what each
-              ecosystem&apos;s prover can improve; block time is an
-              infrastructure parameter.
+              block interval (Miden ~3s, Aleo ~15s, Aztec ~72s).{" "}
+              <strong style={{ color: "#9aa0a6" }}>Consume</strong> = Bob
+              consuming Alice&apos;s note — Miden only (Aleo/Aztec: not needed).
             </p>
           </div>
         </div>
@@ -367,15 +373,26 @@ function fmt(ms: number): string {
 
 function ComparisonTable({
   results,
+  view,
 }: {
   results: Record<string, BenchResult>;
+  view: "send" | "bob-spendable";
 }) {
   const ecosystems = BENCHMARKS.map((b) => b.key).filter((k) => results[k]);
   if (ecosystems.length === 0) return null;
 
-  // Always use known block times for consistency
   const getBlockMs = (key: string) => (BLOCK_TIME_S[key] ?? 0) * 1000;
-  const getTotal = (key: string) => results[key].median + getBlockMs(key);
+
+  // "send" view: prove + 1 block
+  // "bob-spendable" view: prove + 1 block + (consume prove + 1 block if Miden)
+  const getTotal = (key: string) => {
+    const r = results[key];
+    const sendTotal = r.median + getBlockMs(key);
+    if (view === "bob-spendable" && r.consumeMedian) {
+      return sendTotal + r.consumeMedian + getBlockMs(key);
+    }
+    return sendTotal;
+  };
 
   const fastestProve = Math.min(...ecosystems.map((k) => results[k].median));
   const fastestTotal = Math.min(...ecosystems.map(getTotal));
@@ -402,11 +419,12 @@ function ComparisonTable({
         <thead>
           <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
             <th style={{ ...thStyle, textAlign: "left" }}>Ecosystem</th>
-            <th style={thStyle}>Prove</th>
-            <th style={thStyle}>Block wait</th>
+            <th style={thStyle}>Send prove</th>
+            <th style={thStyle}>Block</th>
+            {view === "bob-spendable" && <th style={thStyle}>Consume prove</th>}
+            {view === "bob-spendable" && <th style={thStyle}>Block</th>}
             <th style={thStyle}>Total</th>
             <th style={thStyle}>n</th>
-            <th style={{ ...thStyle, textAlign: "left" }}>Mode</th>
           </tr>
         </thead>
         <tbody>
@@ -415,6 +433,7 @@ function ComparisonTable({
             const b = BENCHMARKS.find((x) => x.key === key)!;
             const blockMs = getBlockMs(key);
             const total = getTotal(key);
+            const consumeMs = r.consumeMedian ?? 0;
             const isFastestProve = r.median === fastestProve && ecosystems.length > 1;
             const isFastestTotal = total === fastestTotal && ecosystems.length > 1;
             return (
@@ -435,12 +454,25 @@ function ComparisonTable({
                     <span style={{ marginLeft: 6, fontSize: 9, color: "#7ee0a3", fontWeight: 400 }}>fastest</span>
                   )}
                 </td>
-                <td style={{
-                  textAlign: "right", padding: "10px 10px",
-                  color: "#f0a060",
-                }}>
+                <td style={{ textAlign: "right", padding: "10px 10px", color: "#f0a060" }}>
                   ~{fmt(blockMs)}
                 </td>
+                {view === "bob-spendable" && (
+                  <td style={{
+                    textAlign: "right", padding: "10px 10px",
+                    color: consumeMs > 0 ? "#e6e6e6" : "#4a5568",
+                  }}>
+                    {consumeMs > 0 ? fmt(consumeMs) : "—"}
+                  </td>
+                )}
+                {view === "bob-spendable" && (
+                  <td style={{
+                    textAlign: "right", padding: "10px 10px",
+                    color: consumeMs > 0 ? "#f0a060" : "#4a5568",
+                  }}>
+                    {consumeMs > 0 ? `~${fmt(blockMs)}` : "—"}
+                  </td>
+                )}
                 <td style={{
                   textAlign: "right", padding: "10px 10px",
                   fontWeight: 600, fontSize: 14,
@@ -452,7 +484,6 @@ function ComparisonTable({
                   )}
                 </td>
                 <td style={{ textAlign: "right", padding: "10px 10px", color: "#9aa0a6" }}>{r.n}</td>
-                <td style={{ padding: "10px 10px", color: "#9aa0a6", fontSize: 12 }}>{r.variant}</td>
               </tr>
             );
           })}

@@ -6,14 +6,15 @@ const STORAGE_KEY = "zk-bench-results";
 export type BenchResult = {
   ecosystem: string;
   variant: string;
-  median: number;       // prove-only median (ms)
+  median: number;          // send prove-only median (ms)
   p25: number;
   p75: number;
   iqr: number;
   n: number;
   samples: number[];
-  blockWaitMs?: number; // median block inclusion wait (ms), 0 if not applicable
-  totalMs?: number;     // median total user wait = prove + block (ms)
+  consumeMedian?: number;  // consume prove median (ms) — Miden only
+  blockWaitMs?: number;    // median block inclusion wait (ms)
+  totalMs?: number;        // median total user wait = prove + block (ms)
   timestamp: number;
 };
 
