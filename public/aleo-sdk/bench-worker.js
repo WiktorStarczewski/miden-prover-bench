@@ -134,7 +134,7 @@ async function handleTransferOnChain(recipient, amountCredits, priorityFee) {
     const resp = await fetch(TESTNET_API + "/testnet/transaction/broadcast", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(txStr),
+      body: txStr,
     });
     if (!resp.ok) {
       const errText = await resp.text();
