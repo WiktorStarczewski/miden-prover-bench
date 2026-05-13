@@ -423,8 +423,11 @@ function NoteAnimation({
         const active = activeCycles[key];
         const completed = completedCounts[key] || 0;
         const r = results[key];
-        // Use last known median as expected duration, or 10s default
-        const expectedMs = r?.median || 10000;
+        // Total flight = prove + block + (consume + block if Miden)
+        const blockMs = (BLOCK_TIME_S[key] ?? 0) * 1000;
+        const proveMs = r?.median || 10000;
+        const consumeMs = r?.consumeMedian || 0;
+        const totalFlightMs = proveMs + blockMs + (consumeMs > 0 ? consumeMs + blockMs : 0);
 
         return (
           <div
@@ -461,7 +464,7 @@ function NoteAnimation({
                     bottom: -2,
                     left: 0,
                     fontSize: 18,
-                    animation: `fly-${key} ${expectedMs}ms linear forwards`,
+                    animation: `fly-${key} ${totalFlightMs}ms linear forwards`,
                   }}
                 >
                   <span style={{ filter: `drop-shadow(0 0 6px ${b.color})` }}>
@@ -492,7 +495,7 @@ function NoteAnimation({
                 )}
                 {!active && completed > 0 && r && (
                   <span style={{ color: "#9aa0a6", fontWeight: 400, marginLeft: 6 }}>
-                    {(r.median / 1000).toFixed(1)}s
+                    {(totalFlightMs / 1000).toFixed(1)}s total
                   </span>
                 )}
               </div>
