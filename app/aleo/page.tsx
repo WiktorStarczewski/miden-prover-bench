@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { saveBenchResult, isAutorun } from "../lib/results";
+import { saveBenchResult, isAutorun, postCycleStart, postCycleEnd } from "../lib/results";
 // Worker messages — must match public/aleo-sdk/bench-worker.js protocol
 // Persistent testnet bench account — fund this address with testnet credits
 const BENCH_PRIVATE_KEY =
@@ -386,6 +386,7 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
           `info variant=${variant} cycle ${i}/${numCycles} transfer_public (alice -> bob, 10)`
         );
 
+        postCycleStart("aleo", i);
         let res;
         try {
           res = await rpcRef.current!.send({
@@ -404,6 +405,7 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
         }
         if (res.type !== "transferOnChain" && res.type !== "run") throw new Error("Unexpected response");
 
+        postCycleEnd("aleo", i, res.durationMs);
         log(
           `outer variant=${variant} prover=local duration_ms=${res.durationMs.toFixed(1)}`
         );

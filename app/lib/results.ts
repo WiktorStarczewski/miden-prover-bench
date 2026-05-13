@@ -47,6 +47,23 @@ export function saveBenchResult(result: BenchResult) {
   }
 }
 
+// Post real-time cycle events to parent window (for dashboard animation)
+export function postCycleStart(ecosystem: string, cycle: number) {
+  try {
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: "cycle-start", ecosystem, cycle }, "*");
+    }
+  } catch {}
+}
+
+export function postCycleEnd(ecosystem: string, cycle: number, durationMs: number) {
+  try {
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: "cycle-end", ecosystem, cycle, durationMs }, "*");
+    }
+  } catch {}
+}
+
 // Check if ?autorun=1 is in the URL
 export function isAutorun(): boolean {
   if (typeof window === "undefined") return false;

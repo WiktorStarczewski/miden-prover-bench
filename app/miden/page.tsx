@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { installOuterProveTiming, type SdkVariant } from "../lib/timing";
-import { saveBenchResult, isAutorun } from "../lib/results";
+import { saveBenchResult, isAutorun, postCycleStart, postCycleEnd } from "../lib/results";
 
 // Both subpaths re-export the same surface from a shared crate; we just pick
 // the type alias from one of them. Runtime imports below are variant-aware.
@@ -504,6 +504,7 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
         // ── send phase ─────────────────────────────────────────────────
         samplePhaseRef.current = { cycle: i, phase: "send" };
         console.log(`[proving-timing] info variant=${variant} cycle ${i}/${numCycles} send wallet -> recipient (1, public)`);
+        postCycleStart("miden", i);
         const tTotal = performance.now();
         await client.sync();
         const tSync = performance.now() - tTotal;
@@ -517,6 +518,7 @@ function BenchPanel({ variant }: { variant: SdkVariant }) {
         });
         const totalSendMs = performance.now() - tTotal;
         totalTimesRef.current.push(totalSendMs);
+        postCycleEnd("miden", i, totalSendMs);
         console.log(`[proving-timing] info variant=${variant} cycle ${i} send submitted txId=${sendTxId.toHex()} syncMs=${tSync.toFixed(0)} totalMs=${totalSendMs.toFixed(0)}`);
 
         // ── consume phase (recipient consumes the just-sent note) ──────

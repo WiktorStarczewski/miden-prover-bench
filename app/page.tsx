@@ -368,40 +368,73 @@ export default function HomePage() {
 // Stick figure animation: note flies from Alice to Bob
 // ---------------------------------------------------------------------------
 
+// Live cycle state, updated via postMessage from iframe benchmarks
+type CycleState = {
+  ecosystem: string;
+  cycle: number;
+  startTime: number;    // performance.now() when cycle-start received
+  durationMs?: number;  // set when cycle-end received
+};
+
 function NoteAnimation({
   results,
 }: {
   results: Record<string, BenchResult>;
 }) {
-  const ecosystems = BENCHMARKS.map((b) => b.key).filter((k) => results[k]);
-  if (ecosystems.length === 0) return null;
+  const [activeCycles, setActiveCycles] = useState<Record<string, CycleState>>({});
+  const [completedCounts, setCompletedCounts] = useState<Record<string, number>>({});
 
-  const getBlockMs = (key: string) => (BLOCK_TIME_S[key] ?? 0) * 1000;
-  const getTotal = (key: string) => {
-    const r = results[key];
-    const t = r.median + getBlockMs(key);
-    return r.consumeMedian ? t + r.consumeMedian + getBlockMs(key) : t;
-  };
+  // Listen for cycle-start / cycle-end from iframes
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "cycle-start") {
+        setActiveCycles((prev) => ({
+          ...prev,
+          [e.data.ecosystem]: {
+            ecosystem: e.data.ecosystem,
+            cycle: e.data.cycle,
+            startTime: performance.now(),
+          },
+        }));
+      } else if (e.data?.type === "cycle-end") {
+        setActiveCycles((prev) => {
+          const copy = { ...prev };
+          delete copy[e.data.ecosystem];
+          return copy;
+        });
+        setCompletedCounts((prev) => ({
+          ...prev,
+          [e.data.ecosystem]: (prev[e.data.ecosystem] || 0) + 1,
+        }));
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
-  const maxTotal = Math.max(...ecosystems.map(getTotal));
-  // Animation runs over 8 seconds scaled to the slowest
-  const ANIM_DURATION = 8;
+  const ecosystems = BENCHMARKS.map((b) => b.key);
+  const hasAnyResults = ecosystems.some((k) => results[k]);
+  if (!hasAnyResults) return null;
 
   return (
     <div style={{ margin: "0 0 20px", overflow: "hidden" }}>
       {ecosystems.map((key) => {
         const b = BENCHMARKS.find((x) => x.key === key)!;
-        const total = getTotal(key);
-        const duration = (total / maxTotal) * ANIM_DURATION;
+        const active = activeCycles[key];
+        const completed = completedCounts[key] || 0;
+        const r = results[key];
+        // Use last known median as expected duration, or 10s default
+        const expectedMs = r?.median || 10000;
+
         return (
           <div
             key={key}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 0,
               marginBottom: 10,
               height: 48,
+              opacity: r ? 1 : 0.3,
             }}
           >
             {/* Alice */}
@@ -415,41 +448,53 @@ function NoteAnimation({
               style={{
                 flex: 1,
                 position: "relative",
-                height: 24,
+                height: 28,
                 borderBottom: `1px dashed ${b.color}33`,
               }}
             >
-              {/* Flying note */}
+              {/* Flying note — only visible when a cycle is active */}
+              {active && (
+                <div
+                  key={`${key}-${active.cycle}`}
+                  style={{
+                    position: "absolute",
+                    bottom: -2,
+                    left: 0,
+                    fontSize: 18,
+                    animation: `fly-${key} ${expectedMs}ms linear forwards`,
+                  }}
+                >
+                  <span style={{ filter: `drop-shadow(0 0 6px ${b.color})` }}>
+                    &#9993;
+                  </span>
+                </div>
+              )}
+
+              {/* Label: ecosystem name + status */}
               <div
                 style={{
                   position: "absolute",
-                  bottom: -1,
-                  left: 0,
-                  animation: `fly-note ${duration}s ease-in-out infinite`,
-                  fontSize: 16,
-                }}
-              >
-                <span style={{ filter: `drop-shadow(0 0 4px ${b.color})` }}>
-                  &#9993;
-                </span>
-              </div>
-              {/* Ecosystem label + time */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: -2,
+                  top: 0,
                   left: "50%",
                   transform: "translateX(-50%)",
-                  fontSize: 11,
-                  color: b.color,
+                  fontSize: 12,
+                  color: active ? b.color : "#6b7280",
                   fontWeight: 600,
                   whiteSpace: "nowrap",
+                  transition: "color 300ms",
                 }}
               >
-                {b.name}{" "}
-                <span style={{ color: "#9aa0a6", fontWeight: 400 }}>
-                  {(total / 1000).toFixed(1)}s
-                </span>
+                {b.name}
+                {active && (
+                  <span style={{ color: "#9aa0a6", fontWeight: 400, marginLeft: 6 }}>
+                    cycle {active.cycle}
+                  </span>
+                )}
+                {!active && completed > 0 && r && (
+                  <span style={{ color: "#9aa0a6", fontWeight: 400, marginLeft: 6 }}>
+                    {(r.median / 1000).toFixed(1)}s
+                  </span>
+                )}
               </div>
             </div>
 
@@ -463,12 +508,14 @@ function NoteAnimation({
       })}
 
       <style>{`
-        @keyframes fly-note {
+        ${BENCHMARKS.map(
+          (b) => `@keyframes fly-${b.key} {
           0% { left: 0%; opacity: 0; }
-          5% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { left: calc(100% - 20px); opacity: 0; }
-        }
+          3% { opacity: 1; }
+          95% { opacity: 1; }
+          100% { left: calc(100% - 24px); opacity: 0; }
+        }`
+        ).join("\n")}
       `}</style>
     </div>
   );

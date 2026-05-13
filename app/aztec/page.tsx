@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { saveBenchResult, isAutorun } from "../lib/results";
+import { saveBenchResult, isAutorun, postCycleStart, postCycleEnd } from "../lib/results";
 
 type Phase =
   | "idle"
@@ -362,6 +362,7 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
         log(`info variant=${variant} cycle ${i}/${numCycles} private transfer`);
 
         // Time simulate+prove+submit only (NO_WAIT)
+        postCycleStart("aztec", i);
         const t0 = performance.now();
         const result = await (tokenRef.current.methods
           .transfer(bobRef.current, 1n)
@@ -371,6 +372,7 @@ function BenchPanel({ threadMode }: { threadMode: ThreadMode }) {
             wait: "NO_WAIT",
           });
         const ms = performance.now() - t0;
+        postCycleEnd("aztec", i, ms);
         log(`outer variant=${variant} prover=local duration_ms=${ms.toFixed(1)}`);
         cycleSamplesRef.current.push({ cycle: i, durationMs: ms });
 
