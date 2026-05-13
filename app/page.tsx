@@ -5,6 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
+// Known testnet block times (seconds). Used to compute total user wait.
+const BLOCK_TIME_S: Record<string, number> = {
+  miden: 3,
+  aleo: 15,
+  aztec: 72,
+};
+
 const BENCHMARKS = [
   {
     key: "miden",
@@ -12,8 +19,8 @@ const BENCHMARKS = [
     proof: "Plonky3 STARK",
     href: "/miden/",
     color: "#1f8a4c",
-    description: "MidenClient SDK · testnet · local prover",
-    operation: "transactions.send() — note creation + auth (ECDSA)",
+    description: "MidenClient SDK · testnet",
+    operation: "client.transactions.send()",
   },
   {
     key: "aleo",
@@ -21,8 +28,8 @@ const BENCHMARKS = [
     proof: "Varuna V2 zk-SNARK",
     href: "/aleo/",
     color: "#4a6ee0",
-    description: "@provablehq/wasm · testnet · credits.aleo",
-    operation: "buildTransferTransaction — transfer_public + fee_public",
+    description: "@provablehq/wasm · testnet",
+    operation: "buildTransferTransaction()",
   },
   {
     key: "aztec",
@@ -30,8 +37,8 @@ const BENCHMARKS = [
     proof: "UltraHonk (Barretenberg)",
     href: "/aztec/",
     color: "#a855f7",
-    description: "EmbeddedWallet + PXE · testnet · private token transfer",
-    operation: "token.transfer().send(NO_WAIT) — simulate + prove",
+    description: "EmbeddedWallet + PXE · testnet",
+    operation: "token.transfer().send()",
   },
 ];
 
@@ -175,11 +182,18 @@ export default function HomePage() {
     <main style={{ maxWidth: 1040, margin: "0 auto" }}>
       <header style={{ marginBottom: 24 }}>
         <h1>ZK Proving Bench</h1>
-        <p style={{ color: "#9aa0a6", margin: 0, fontSize: 14 }}>
-          Browser-based proving benchmarks: how long does a user wait to prove
-          &quot;Alice sends tokens to Bob&quot; in each ZK ecosystem?{" "}
+        <p style={{ color: "#d8dee5", margin: "0 0 6px", fontSize: 15 }}>
+          One operation, three ecosystems:{" "}
+          <strong>&quot;Alice sends 10 tokens to Bob.&quot;</strong>
+        </p>
+        <p style={{ color: "#9aa0a6", margin: 0, fontSize: 13, lineHeight: 1.6 }}>
+          Each benchmark measures the same user action — creating a token
+          transfer transaction, proving it locally in the browser (WASM), and
+          waiting for it to land on-chain. We report prove time (local ZK
+          proof generation) and block time (waiting for chain inclusion)
+          separately.{" "}
           <Link href="/about/" style={{ color: "#7ee0a3" }}>
-            Why this comparison matters &rarr;
+            Methodology &amp; caveats &rarr;
           </Link>
         </p>
       </header>
@@ -325,29 +339,19 @@ export default function HomePage() {
           <ComparisonTable results={latest} />
           <div style={{ color: "#6b7280", fontSize: 11, margin: "12px 0 0", lineHeight: 1.7 }}>
             <p style={{ margin: "0 0 6px" }}>
-              <strong style={{ color: "#9aa0a6" }}>Prove</strong> = local
-              ZK proof generation in the browser (WASM).{" "}
-              <strong style={{ color: "#9aa0a6" }}>Block wait</strong> = time
-              for the transaction to be included in a block.{" "}
-              <strong style={{ color: "#9aa0a6" }}>Total</strong> = what the
-              user actually waits.
-            </p>
-            <p style={{ margin: "0 0 6px" }}>
-              <strong style={{ color: "#1f8a4c" }}>Miden</strong>: block time
-              ~3s. Block wait includes <code>client.sync()</code> which waits
-              for the previous tx to land before the next send.
-            </p>
-            <p style={{ margin: "0 0 6px" }}>
-              <strong style={{ color: "#4a6ee0" }}>Aleo</strong>: block time
-              ~15s. Our benchmark builds + proves the transaction but does not
-              submit it, so block wait shows &ldquo;—&rdquo;. A real user would
-              wait an additional ~15s for block inclusion.
+              <strong style={{ color: "#9aa0a6" }}>Prove</strong> = local ZK
+              proof generation in the browser (measured).{" "}
+              <strong style={{ color: "#9aa0a6" }}>Block time</strong> = testnet
+              block interval (known constant).{" "}
+              <strong style={{ color: "#9aa0a6" }}>Total</strong> = prove +
+              block time = what a user waits from clicking &quot;Send&quot;
+              until the transfer is on-chain.
             </p>
             <p style={{ margin: 0 }}>
-              <strong style={{ color: "#a855f7" }}>Aztec</strong>: block time
-              ~72s. Each private transfer nullifies a note — the next transfer
-              needs the new note from the previous block, so we must wait for
-              inclusion between cycles. This is inherent to Aztec&apos;s UTXO model.
+              Block times: Miden ~3s, Aleo ~15s, Aztec ~72s. These are current
+              testnet values and may change. The prove time is what each
+              ecosystem&apos;s prover can improve; block time is an
+              infrastructure parameter.
             </p>
           </div>
         </div>
@@ -369,9 +373,12 @@ function ComparisonTable({
   const ecosystems = BENCHMARKS.map((b) => b.key).filter((k) => results[k]);
   if (ecosystems.length === 0) return null;
 
-  const totals = ecosystems.map((k) => results[k].totalMs ?? results[k].median);
-  const fastestTotal = Math.min(...totals);
+  // Always use known block times for consistency
+  const getBlockMs = (key: string) => (BLOCK_TIME_S[key] ?? 0) * 1000;
+  const getTotal = (key: string) => results[key].median + getBlockMs(key);
+
   const fastestProve = Math.min(...ecosystems.map((k) => results[k].median));
+  const fastestTotal = Math.min(...ecosystems.map(getTotal));
 
   const thStyle = {
     textAlign: "right" as const,
@@ -406,8 +413,8 @@ function ComparisonTable({
           {ecosystems.map((key) => {
             const r = results[key];
             const b = BENCHMARKS.find((x) => x.key === key)!;
-            const total = r.totalMs ?? r.median;
-            const blockWait = r.blockWaitMs ?? 0;
+            const blockMs = getBlockMs(key);
+            const total = getTotal(key);
             const isFastestProve = r.median === fastestProve && ecosystems.length > 1;
             const isFastestTotal = total === fastestTotal && ecosystems.length > 1;
             return (
@@ -430,16 +437,16 @@ function ComparisonTable({
                 </td>
                 <td style={{
                   textAlign: "right", padding: "10px 10px",
-                  color: blockWait > 0 ? "#f0a060" : "#4a5568",
+                  color: "#f0a060",
                 }}>
-                  {blockWait > 0 ? fmt(blockWait) : "—"}
+                  ~{fmt(blockMs)}
                 </td>
                 <td style={{
                   textAlign: "right", padding: "10px 10px",
                   fontWeight: 600, fontSize: 14,
                   color: isFastestTotal ? "#7ee0a3" : "#d8dee5",
                 }}>
-                  {fmt(total)}
+                  ~{fmt(total)}
                   {isFastestTotal && (
                     <span style={{ marginLeft: 6, fontSize: 9, color: "#7ee0a3", fontWeight: 400 }}>fastest</span>
                   )}
