@@ -144,7 +144,7 @@ export default function AboutPage() {
                 "Aleo",
                 "~15s",
                 "No (public transfers)",
-                "Public balance transfers (transfer_public) update a mapping, not UTXO notes. Sequential sends from the same account don't conflict. However, our benchmark doesn't submit the tx, so block wait isn't measured.",
+                "Public balance transfers (transfer_public) update a mapping, not UTXO notes. Sequential sends from the same account don't conflict. The benchmark submits the tx and polls for on-chain confirmation.",
               ],
               [
                 "Aztec",
@@ -155,10 +155,12 @@ export default function AboutPage() {
             ]}
           />
           <p>
-            <strong>Total user wait = prove time + block time.</strong> For
-            Miden this is ~9s. For Aleo ~27s (if submitted). For Aztec ~87s.
-            The block time is a chain infrastructure parameter, not a prover
-            limitation — but it&apos;s what the user experiences.
+            <strong>Total user wait = prove time + block wait.</strong> Block
+            wait is measured (not estimated) for all three ecosystems. On
+            average, a tx submitted at a random point in the block interval
+            waits block_time / 2. The block time is a chain infrastructure
+            parameter, not a prover limitation — but it&apos;s what the user
+            experiences.
           </p>
         </Section>
 
@@ -196,6 +198,98 @@ export default function AboutPage() {
               key sizes, or state tree depths.
             </li>
           </ul>
+        </Section>
+
+        <Section title="Why are proving times different?">
+          <p>
+            Intuitively, you might expect SNARKs (smaller proofs, more
+            structured circuits) to be faster than STARKs (larger proofs,
+            more general VM). In practice, the picture is more nuanced.
+          </p>
+
+          <h4 style={{ color: "#a855f7", margin: "14px 0 6px" }}>
+            Why Aztec is slowest
+          </h4>
+          <p>
+            A single Aztec private transfer doesn&apos;t prove just one
+            circuit. The PXE (Private Execution Environment) runs multiple
+            proving steps:
+          </p>
+          <ul style={{ margin: "4px 0 8px", paddingLeft: 20, lineHeight: 1.7 }}>
+            <li>
+              <strong>App circuit</strong> — the token contract&apos;s{" "}
+              <code>transfer</code> function (Noir → UltraHonk)
+            </li>
+            <li>
+              <strong>Private kernel circuit</strong> — enforces protocol
+              rules: nullifier uniqueness, note commitment validity, access
+              control
+            </li>
+            <li>
+              <strong>Recursive verification</strong> — the kernel verifies
+              the app proof inside itself
+            </li>
+          </ul>
+          <p>
+            Additionally, UltraHonk uses elliptic curve operations
+            (multi-scalar multiplications) which are expensive in WASM — there
+            are no native field arithmetic instructions. Barretenberg&apos;s C++
+            codebase compiled to WASM may not parallelize as efficiently as
+            Rust-native rayon.
+          </p>
+
+          <h4 style={{ color: "#1f8a4c", margin: "14px 0 6px" }}>
+            Why Miden is fastest
+          </h4>
+          <p>
+            Miden proves one thing: the VM execution trace. A single STARK
+            proof covers the entire transaction including authentication
+            (ECDSA/Falcon). The key advantages:
+          </p>
+          <ul style={{ margin: "4px 0 8px", paddingLeft: 20, lineHeight: 1.7 }}>
+            <li>
+              <strong>Small field arithmetic</strong> — Plonky3 uses the
+              Goldilocks field (64-bit). Operations map directly to
+              WASM&apos;s native 64-bit integers. No elliptic curve math.
+            </li>
+            <li>
+              <strong>FRI-based commitments</strong> — Fast Reed-Solomon
+              Interactive Oracle Proofs. Prover work is dominated by NTT/FFT
+              and Merkle hashing, both highly parallelizable.
+            </li>
+            <li>
+              <strong>rayon parallelism</strong> — Rust&apos;s{" "}
+              <code>rayon</code> library compiled via{" "}
+              <code>wasm-bindgen-rayon</code> gives fine-grained work-stealing
+              parallelism across all CPU cores.
+            </li>
+          </ul>
+
+          <h4 style={{ color: "#4a6ee0", margin: "14px 0 6px" }}>
+            Why Aleo is in between
+          </h4>
+          <p>
+            Aleo uses Varuna V2 (a Marlin variant) — a SNARK over a larger
+            field with elliptic curve commitments, similar to Aztec. However,
+            Aleo&apos;s <code>transfer_public</code> is a simpler program than
+            Aztec&apos;s private transfer (no kernel circuits, no recursive
+            verification). Aleo also proves <strong>two</strong> separate
+            executions per transaction (the transfer function + the fee
+            function), which adds overhead compared to Miden&apos;s single proof.
+            The SnarkVM rayon-to-Web-Worker bridge provides good multi-core
+            utilization.
+          </p>
+
+          <h4 style={{ margin: "14px 0 6px" }}>The bottom line</h4>
+          <p>
+            Miden is faster not because &quot;STARKs &gt; SNARKs&quot; in
+            general, but because Plonky3&apos;s small-field arithmetic is
+            very WASM-friendly, rayon parallelizes well, and it proves one
+            execution trace instead of multiple recursive circuits.
+            Aztec&apos;s architecture is optimized for strong privacy
+            guarantees (kernel circuits enforce protocol rules at the proof
+            level), which necessarily adds proving overhead.
+          </p>
         </Section>
 
         <Section title="Reproducibility">
